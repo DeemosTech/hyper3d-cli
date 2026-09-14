@@ -1,0 +1,8 @@
+{
+  "name": "hyper3d-cli-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "devDependencies": {"zod": "^4.0.0"},
+  "scripts": {"test": "node --test", "cli": "node packages/cli/src/index.js", "pack:check": "npm pack --workspace @hyper3d/cli --dry-run"}
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@hyper3d/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hyper3D CLI backed by MCP",
+  "repository": {"type": "git", "url": "git+https://github.com/DeemosTech/hyper3d-cli.git", "directory": "packages/cli"},
+  "type": "module",
+  "bin": {"hyper3d": "src/index.js"},
+  "files": ["src", "schema", "README.md"],
+  "engines": {"node": ">=22"},
+  "dependencies": {"@modelcontextprotocol/sdk": "^1.30.0", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "commander": "^14.0.0", "semver": "^7.7.0"}
+}
