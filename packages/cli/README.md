@@ -21,5 +21,7 @@ Use `HYPER3D_ACCESS_TOKEN` for an existing MCP OAuth access token in automation.
 Outputs are JSON; warnings are written to stderr. Generation consumes credits.
 
 Login uses Device Flow: compare the terminal code with the browser and confirm.
+The backend redirects to `https://hyper3d.ai/workspace/oauth/device?interaction=<handle>`;
+the CLI always opens the verification URL returned by the server.
 The default CIMD is https://hyper3d.ai/oauth_cimd/cli.json. No localhost listener
 is required. The backend, confirmation UI and updated CIMD must be deployed first.

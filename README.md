@@ -39,6 +39,9 @@ node packages/cli/src/index.js auth logout
 ```
 
 Login prints a code and opens the returned `verification_uri_complete` URL.
+The backend then redirects the browser to
+`https://hyper3d.ai/workspace/oauth/device?interaction=<handle>`.
+The CLI uses the returned verification URL, not a hardcoded frontend URL.
 The user confirms that the browser code matches the terminal, then authorizes
 the CLI. `--no-browser` only prints the link/code for SSH or another device.
 Failure to launch the browser leaves the same login waiting for manual approval.
