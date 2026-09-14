@@ -24,36 +24,37 @@ for development. All data output is JSON on stdout; warnings go to stderr.
 
 ## Authentication and CIMD
 
-The CLI supports a CIMD public native client with authorization code + PKCE.
-Host its metadata on the **Hyper3D official HTTPS domain**. The exact public URL
-is a deployment decision; the URL below is an example, not an existing endpoint.
+The CLI uses OAuth Device Flow for every interactive login. Its public CIMD
+client ID is `https://hyper3d.ai/oauth_cimd/cli.json`. Deploy the JSON in
+`oauth_cimd/cli.json` at that exact URL, anonymously with
+`Content-Type: application/json`. It declares Device Flow and refresh-token
+grants, with empty `redirect_uris` and `response_types`. No client secret or
+localhost callback is used. Publishing CIMD does not publish the CLI to npm.
 
 ```sh
-npm run cli -- auth metadata --client-id https://hyper3d.com/oauth/cli.json
-```
-
-To produce a file, use the executable directly so npm's own banner is not included:
-
-```sh
-node packages/cli/src/index.js auth metadata \
-  --client-id https://hyper3d.com/oauth/cli.json > client-metadata.json
-```
-
-Serve that JSON at exactly the selected `client_id` URL, anonymously, with
-`Content-Type: application/json`. The CLI callback is
-`http://127.0.0.1:43817/callback`; deploy the generated redirect URI unchanged.
-There is no client secret. Publishing CIMD does not publish the CLI to npm.
-
-```sh
-node packages/cli/src/index.js auth login --client-id https://hyper3d.com/oauth/cli.json
+node packages/cli/src/index.js auth login
+node packages/cli/src/index.js auth login --no-browser
 node packages/cli/src/index.js auth status
 node packages/cli/src/index.js auth logout
 ```
 
-Login prints a browser link and waits up to five minutes for the loopback callback.
-The final CIMD URL must be deployed before this can be tested against production.
-The SDK handles OAuth discovery, PKCE, resource indicators and token refresh.
-This client uses the CIMD ID explicitly and does not fall back to DCR.
+Login prints a code and opens the returned `verification_uri_complete` URL.
+The user confirms that the browser code matches the terminal, then authorizes
+the CLI. `--no-browser` only prints the link/code for SSH or another device.
+Failure to launch the browser leaves the same login waiting for manual approval.
+The CLI polls until success, denial or device-code expiry and handles polling
+backoff. Ctrl+C cancels login. Login never falls back to authorization-code/PKCE.
+
+Deploy the backend Device Flow support, frontend device confirmation page and
+updated CIMD, and add the exact client ID to `grant.device_flow_client_ids`
+before using this against production. The CLI fails explicitly when the server
+does not advertise Device Flow. Existing MCP clients retain their own login flows.
+
+The SDK handles OAuth discovery, resource validation and subsequent token
+requests. Normal MCP operations only refresh stored credentials; they never
+start interactive login. Existing refresh tokens can still be used if the server
+accepts them. `HYPER3D_CLIENT_ID` or `--client-id` overrides the default CIMD URL;
+`auth metadata --client-id <url>` generates the corresponding JSON. No DCR fallback.
 
 Credentials are stored per endpoint in `~/.hyper3d` (directory mode 0700, token
 file mode 0600 on POSIX); they are not encrypted. On Windows, storage inherits

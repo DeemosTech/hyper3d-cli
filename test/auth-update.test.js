@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, rm, stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {clientMetadata, parseCallback, credentialPath, createProvider, loadCredentials, logout} from '../packages/cli/src/auth.js';
+import {clientMetadata, DEVICE_GRANT_TYPE, credentialPath, createProvider, loadCredentials, logout} from '../packages/cli/src/auth.js';
 import {checkUpdate, update} from '../packages/cli/src/update.js';
 import {evaluatePolicy, enforcePolicy} from '../packages/cli/src/policy.js';
 
@@ -11,13 +11,10 @@ test('CIMD is a public native client with an exact client ID', () => {
   const metadata = clientMetadata('https://hyper3d.com/oauth/cli.json');
   assert.equal(metadata.client_id, 'https://hyper3d.com/oauth/cli.json');
   assert.equal(metadata.token_endpoint_auth_method, 'none');
-  assert.ok(metadata.redirect_uris[0].startsWith('http://127.0.0.1:'));
+  assert.deepEqual(metadata.redirect_uris, []);
+  assert.deepEqual(metadata.response_types, []);
+  assert.deepEqual(metadata.grant_types, [DEVICE_GRANT_TYPE, 'refresh_token']);
   assert.throws(() => clientMetadata('http://example.com/client.json'));
-});
-test('OAuth callbacks reject state mismatch, duplicate parameters and wrong paths', () => {
-  assert.equal(parseCallback('/callback?state=abc&code=123', 'abc'), '123');
-  for (const url of ['/callback?state=x&code=1', '/callback?state=abc&state=abc&code=1', '/wrong?state=abc&code=1', '/callback?state=abc&error=access_denied'])
-    assert.throws(() => parseCallback(url, 'abc'));
 });
 test('credentials are endpoint-bound, private, and removable', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'hyper3d-auth-'));

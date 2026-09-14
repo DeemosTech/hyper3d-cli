@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {withClient, listTools} from './mcp.js';
 import {compareTool, validateInput} from './schema.js';
 import {checkUpdate, update, startupUpdate} from './update.js';
-import {clientMetadata, login, logout, loadCredentials} from './auth.js';
+import {clientMetadata, login, logout, loadCredentials, DEFAULT_CLIENT_ID} from './auth.js';
 import {enforcePolicy} from './policy.js';
 
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -22,8 +22,9 @@ cli.hook('preAction', async (_root, command) => {
 });
 const authentication = cli.command('auth');
 authentication.command('metadata').requiredOption('--client-id <url>', 'Public HTTPS CIMD URL').action(options => print(clientMetadata(options.clientId)));
-authentication.command('login').option('--client-id <url>', 'Public HTTPS CIMD URL', process.env.HYPER3D_CLIENT_ID)
-  .action(async options => { await login(cli.opts().endpoint, options.clientId); print({authenticated: true}); });
+authentication.command('login').option('--client-id <url>', 'Public HTTPS CIMD URL', process.env.HYPER3D_CLIENT_ID ?? DEFAULT_CLIENT_ID)
+  .option('--no-browser', 'Print the verification link and code without opening a browser')
+  .action(async options => { await login(cli.opts().endpoint, options.clientId, {browser: options.browser}); print({authenticated: true}); });
 authentication.command('logout').action(async () => { await logout(cli.opts().endpoint); print({localCredentialsRemoved: true}); });
 authentication.command('status').action(async () => {
   const data = await loadCredentials(cli.opts().endpoint);

@@ -1,11 +1,15 @@
-import {createServer} from 'node:http';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {setTimeout as sleep} from 'node:timers/promises';
 import {randomBytes, createHash} from 'node:crypto';
 import {mkdir, readFile, writeFile, rename, rm} from 'node:fs/promises';
 import {homedir} from 'node:os';
 import {join} from 'node:path';
-import {auth} from '@modelcontextprotocol/sdk/client/auth.js';
+import {discoverOAuthProtectedResourceMetadata, discoverAuthorizationServerMetadata, selectResourceURL} from '@modelcontextprotocol/sdk/client/auth.js';
+import {OAuthTokensSchema} from '@modelcontextprotocol/sdk/shared/auth.js';
 
-export const redirectUrl = 'http://127.0.0.1:43817/callback';
+export const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
+export const DEFAULT_CLIENT_ID = 'https://hyper3d.ai/oauth_cimd/cli.json';
 export function clientMetadata(clientId) {
   const url = new URL(clientId);
   if (url.protocol !== 'https:' || url.pathname === '/' || url.hash || url.username || url.password)
@@ -13,9 +17,9 @@ export function clientMetadata(clientId) {
   return {
     client_id: clientId, client_name: 'Hyper3D CLI',
     client_uri: 'https://github.com/DeemosTech/hyper3d-cli',
-    application_type: 'native', redirect_uris: [redirectUrl],
-    grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'],
-    token_endpoint_auth_method: 'none', scope: 'rodin:generate rodin:read',
+    application_type: 'native', redirect_uris: [],
+    grant_types: [DEVICE_GRANT_TYPE, 'refresh_token'], response_types: [],
+    token_endpoint_auth_method: 'none', scope: 'rodin:generate rodin:read offline_access',
   };
 }
 export function credentialPath(endpoint) {
@@ -37,27 +41,23 @@ async function saveCredentials(endpoint, data) {
 }
 export async function logout(endpoint) { await rm(credentialPath(endpoint), {force: true}); }
 
-export function createProvider(endpoint, data, interactive = false) {
+export function createProvider(endpoint, data) {
   const metadata = clientMetadata(data.clientId);
-  const state = randomBytes(32).toString('hex');
-  let verifier;
   return {
-    redirectUrl, clientMetadataUrl: data.clientId,
+    clientMetadataUrl: data.clientId,
     get clientMetadata() { const {client_id, ...rest} = metadata; return rest; },
     clientInformation: () => ({client_id: data.clientId}),
-    state: () => state,
     tokens: () => data.tokens,
     saveTokens: async tokens => {
-      data.tokens = tokens;
+      data.tokens = {...tokens, refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token};
       data.expiresAt = tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined;
       await saveCredentials(endpoint, data);
     },
-    saveCodeVerifier: value => { verifier = value; },
-    codeVerifier: () => { if (!verifier) throw new Error('Missing PKCE verifier'); return verifier; },
-    redirectToAuthorization: url => {
-      if (!interactive) throw new Error('Authentication expired. Run hyper3d auth login.');
-      process.stderr.write(`Open this URL in your browser to sign in:\n${url.href}\n`);
+    prepareTokenRequest: () => {
+      if (!data.tokens?.refresh_token) throw new Error('Authentication expired. Run hyper3d auth login.');
+      return new URLSearchParams({grant_type: 'refresh_token', refresh_token: data.tokens.refresh_token});
     },
+    redirectToAuthorization: () => { throw new Error('Run hyper3d auth login to authorize this device.'); },
     invalidateCredentials: async scope => {
       if (scope === 'all' || scope === 'tokens') {
         delete data.tokens; delete data.expiresAt;
@@ -67,55 +67,123 @@ export function createProvider(endpoint, data, interactive = false) {
   };
 }
 
-export function parseCallback(requestUrl, expectedState) {
-  const url = new URL(requestUrl, redirectUrl);
-  if (url.pathname !== '/callback') throw new Error('Unexpected callback path');
-  if (url.searchParams.getAll('state').length !== 1 || url.searchParams.get('state') !== expectedState)
-    throw new Error('Invalid OAuth state');
-  if (url.searchParams.has('error')) throw new Error('Authorization was denied');
-  if (url.searchParams.getAll('code').length !== 1 || !url.searchParams.get('code')) throw new Error('Missing authorization code');
-  return url.searchParams.get('code');
+function secureUrl(value) {
+  const url = new URL(value);
+  if (url.username || url.password || url.hash ||
+      (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))))
+    throw new Error('OAuth URLs must use HTTPS (HTTP is allowed for localhost tests).');
+  return url;
 }
 
-export async function login(endpoint, clientId) {
-  const endpointUrl = new URL(endpoint);
-  if (endpointUrl.protocol !== 'https:' && !(endpointUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(endpointUrl.hostname)))
-    throw new Error('OAuth endpoint must use HTTPS (HTTP is allowed for localhost tests).');
-  if (!clientId) throw new Error('Set HYPER3D_CLIENT_ID to the published CIMD URL, or use --client-id.');
-  const provider = createProvider(endpoint, {clientId}, true);
-  const expectedState = provider.state();
-  let resolveCode, rejectCode;
-  const code = new Promise((resolve, reject) => { resolveCode = resolve; rejectCode = reject; });
-  // Attach immediately so timeout during network discovery is handled.
-  code.catch(() => {});
-  const server = createServer((req, res) => {
-    if (req.method !== 'GET') { res.writeHead(405).end(); return; }
-    try {
-      const value = parseCallback(req.url, expectedState);
-      res.writeHead(200, {'Content-Type': 'text/plain', 'Cache-Control': 'no-store'}).end('Authorization received. Return to the terminal.');
-      resolveCode(value);
-    } catch {
-      res.writeHead(400, {'Content-Type': 'text/plain'}).end('Invalid OAuth callback.');
-      const denied = new URL(req.url, redirectUrl);
-      if (denied.pathname === '/callback' && denied.searchParams.getAll('state').length === 1 && denied.searchParams.get('state') === expectedState && denied.searchParams.has('error'))
-        rejectCode(new Error('Authorization was denied'));
-    }
-  });
-  const timeout = setTimeout(() => rejectCode(new Error('Login timed out after 5 minutes')), 300000);
-  const stop = () => rejectCode(new Error('Login cancelled'));
+async function openBrowser(url) {
+  const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'rundll32.exe' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['url.dll,FileProtocolHandler', url] : [url];
+  await promisify(execFile)(command, args, {timeout: 5000});
+}
+
+function oauthFailure(body, status) {
+  const messages = {
+    access_denied: 'Authorization denied.',
+    expired_token: 'Device code expired. Run hyper3d auth login again.',
+    invalid_grant: 'Device authorization is invalid or already used. Run hyper3d auth login again.',
+    unauthorized_client: 'Device Flow is not enabled for this CLI client.',
+    invalid_client: 'CLI client metadata was rejected. Check the published CIMD.',
+  };
+  return new Error(messages[body?.error] ?? `OAuth request failed (HTTP ${status}).`);
+}
+
+export async function login(endpoint, clientId = DEFAULT_CLIENT_ID, {
+  browser = true, fetchFn = fetch, open = openBrowser,
+  write = text => process.stderr.write(text), wait = sleep, now = Date.now,
+  signal,
+} = {}) {
+  secureUrl(endpoint);
+  const provider = createProvider(endpoint, {clientId});
+  const cancelled = new AbortController();
+  const stop = () => cancelled.abort(new Error('Login cancelled'));
   process.once('SIGINT', stop);
+  const active = signal ? AbortSignal.any([signal, cancelled.signal]) : cancelled.signal;
+  // Bound discovery and issuance too, not only the polling phase.
+  const setupSignal = AbortSignal.any([active, AbortSignal.timeout(60000)]);
+  const request = (input, init = {}) => {
+    secureUrl(input);
+    return fetchFn(input, {...init, redirect: 'error', signal: AbortSignal.any([
+      init.signal ?? setupSignal, AbortSignal.timeout(15000),
+    ])});
+  };
+  const post = (url, fields, requestSignal) => request(url, {
+    method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json'},
+    body: new URLSearchParams(fields), signal: requestSignal,
+  });
   try {
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(43817, '127.0.0.1', resolve);
-    });
-    const fetchFn = (url, init) => fetch(url, {...init, signal: AbortSignal.timeout(15000)});
-    const result = await auth(provider, {serverUrl: endpoint, fetchFn});
-    if (result === 'REDIRECT') await auth(provider, {serverUrl: endpoint, authorizationCode: await code, fetchFn});
+    const resourceMetadata = await discoverOAuthProtectedResourceMetadata(endpoint, undefined, request);
+    const issuer = resourceMetadata.authorization_servers?.[0];
+    if (!issuer) throw new Error('MCP discovery did not advertise an authorization server.');
+    secureUrl(issuer);
+    const metadata = await discoverAuthorizationServerMetadata(issuer, {fetchFn: request});
+    if (!metadata || new URL(metadata.issuer).href !== new URL(issuer).href)
+      throw new Error('OAuth discovery issuer mismatch.');
+    if (!metadata.device_authorization_endpoint || !metadata.grant_types_supported?.includes(DEVICE_GRANT_TYPE))
+      throw new Error('The server does not advertise Device Flow. Deploy and enable the backend before logging in.');
+    secureUrl(metadata.token_endpoint);
+    const resource = String(await selectResourceURL(new URL(endpoint), provider, resourceMetadata));
+    const scope = [...new Set([...(resourceMetadata.scopes_supported ?? ['rodin:generate', 'rodin:read']), 'offline_access'])].join(' ');
+    const response = await post(metadata.device_authorization_endpoint, {client_id: clientId, resource, scope});
+    const device = await response.json();
+    if (!response.ok) throw oauthFailure(device, response.status);
+    if (typeof device.device_code !== 'string' || !device.device_code ||
+        typeof device.user_code !== 'string' || !/^[A-Za-z0-9 -]{1,64}$/.test(device.user_code) ||
+        !Number.isSafeInteger(device.expires_in) || device.expires_in <= 0 || device.expires_in > 86400 ||
+        (device.interval !== undefined && (!Number.isSafeInteger(device.interval) || device.interval <= 0 || device.interval > 86400)))
+      throw new Error('Invalid device authorization response.');
+    const verification = secureUrl(device.verification_uri);
+    const complete = device.verification_uri_complete ? secureUrl(device.verification_uri_complete) : verification;
+    if (complete.origin !== verification.origin) throw new Error('Verification URL origin mismatch.');
+    const deadline = now() + device.expires_in * 1000;
+    const pollSignal = AbortSignal.any([active, AbortSignal.timeout(device.expires_in * 1000)]);
+    let interval = (device.interval ?? 5) * 1000;
+    write(`Confirm that the browser shows this same code: ${device.user_code}\nOpen this URL on this or another device:\n${complete.href}\n`);
+    if (browser) {
+      try { await open(complete.href); }
+      catch { write('Could not open a browser. Open the link above manually; login is still waiting.\n'); }
+    }
+    write('Waiting for authorization…\n');
+    while (now() < deadline) {
+      active.throwIfAborted();
+      await wait(Math.min(interval, deadline - now()), undefined, {signal: pollSignal});
+      if (now() >= deadline) break;
+      let tokenResponse;
+      try {
+        tokenResponse = await post(metadata.token_endpoint, {
+          grant_type: DEVICE_GRANT_TYPE, client_id: clientId, device_code: device.device_code,
+        }, pollSignal);
+      } catch (error) {
+        pollSignal.throwIfAborted();
+        if (error.name !== 'TimeoutError' && !(error instanceof TypeError)) throw error;
+        interval = Math.min(interval * 2, device.expires_in * 1000);
+        continue;
+      }
+      if (tokenResponse.status === 429 || tokenResponse.status >= 500) {
+        const retry = Number(tokenResponse.headers.get('Retry-After'));
+        interval = Math.max(interval + 5000, Number.isFinite(retry) && retry > 0 ? retry * 1000 : 0);
+        await tokenResponse.body?.cancel();
+        continue;
+      }
+      const tokens = await tokenResponse.json();
+      if (tokenResponse.ok) {
+        await provider.saveTokens(OAuthTokensSchema.parse(tokens));
+        return;
+      }
+      if (tokens.error === 'authorization_pending') continue;
+      if (tokens.error === 'slow_down') { interval += 5000; continue; }
+      throw oauthFailure(tokens, tokenResponse.status);
+    }
+    throw new Error('Device code expired. Run hyper3d auth login again.');
+  } catch (error) {
+    if (active.aborted) throw active.reason;
+    if (error.name === 'TimeoutError' || error.cause?.name === 'TimeoutError') throw new Error('Login timed out. Run hyper3d auth login again.');
+    throw error;
   } finally {
-    clearTimeout(timeout);
     process.removeListener('SIGINT', stop);
-    server.closeAllConnections();
-    await new Promise(resolve => server.close(resolve));
   }
 }
