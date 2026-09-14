@@ -121,3 +121,21 @@ test('server throttling backs off and missing refresh credentials require explic
   const provider = createProvider(endpoint, {clientId: DEFAULT_CLIENT_ID});
   await assert.rejects(auth(provider, {serverUrl: endpoint, fetchFn: h.options.fetchFn}), /auth login/);
 }));
+
+
+test('device login preserves endpoint through OIDC discovery fallback', () => isolated(async () => {
+  const h = harness();
+  const originalFetch = h.options.fetchFn;
+  const fetchFn = async (input, init) => {
+    const url = new URL(input);
+    if (url.pathname.includes('oauth-authorization-server')) return json({}, 404);
+    if (url.pathname.includes('openid-configuration')) {
+      const response = await originalFetch(`${issuer}/.well-known/oauth-authorization-server`, init);
+      return json({...await response.json(), jwks_uri: `${issuer}/jwks`, subject_types_supported: ['public'], id_token_signing_alg_values_supported: ['RS256']});
+    }
+    return originalFetch(input, init);
+  };
+  await login(endpoint, undefined, {...h.options, fetchFn});
+  assert.equal(h.requests, 1);
+  assert.equal((await loadCredentials(endpoint)).tokens.access_token, 'access');
+}));

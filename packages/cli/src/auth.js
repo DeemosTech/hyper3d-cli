@@ -120,15 +120,22 @@ export async function login(endpoint, clientId = DEFAULT_CLIENT_ID, {
     const issuer = resourceMetadata.authorization_servers?.[0];
     if (!issuer) throw new Error('MCP discovery did not advertise an authorization server.');
     secureUrl(issuer);
-    const metadata = await discoverAuthorizationServerMetadata(issuer, {fetchFn: request});
+    // SDK's OIDC schema strips Device Flow extension fields. Preserve the
+    // endpoint from the same successful document while retaining SDK validation.
+    let deviceAuthorizationEndpoint;
+    const metadata = await discoverAuthorizationServerMetadata(issuer, {fetchFn: async (input, init) => {
+      const response = await request(input, init);
+      if (response.ok) deviceAuthorizationEndpoint = (await response.clone().json()).device_authorization_endpoint;
+      return response;
+    }});
     if (!metadata || new URL(metadata.issuer).href !== new URL(issuer).href)
       throw new Error('OAuth discovery issuer mismatch.');
-    if (!metadata.device_authorization_endpoint || !metadata.grant_types_supported?.includes(DEVICE_GRANT_TYPE))
+    if (typeof deviceAuthorizationEndpoint !== 'string' || !metadata.grant_types_supported?.includes(DEVICE_GRANT_TYPE))
       throw new Error('The server does not advertise Device Flow. Deploy and enable the backend before logging in.');
     secureUrl(metadata.token_endpoint);
     const resource = String(await selectResourceURL(new URL(endpoint), provider, resourceMetadata));
     const scope = [...new Set([...(resourceMetadata.scopes_supported ?? ['rodin:generate', 'rodin:read']), 'offline_access'])].join(' ');
-    const response = await post(metadata.device_authorization_endpoint, {client_id: clientId, resource, scope});
+    const response = await post(deviceAuthorizationEndpoint, {client_id: clientId, resource, scope});
     const device = await response.json();
     if (!response.ok) throw oauthFailure(device, response.status);
     if (typeof device.device_code !== 'string' || !device.device_code ||
