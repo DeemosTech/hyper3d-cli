@@ -3,18 +3,18 @@ import assert from 'node:assert/strict';
 import {mkdtemp, mkdir, rm, stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {clientMetadata, DEVICE_GRANT_TYPE, credentialPath, createProvider, loadCredentials, logout} from '../packages/cli/src/auth.js';
+import {clientMetadata, CLI_CLIENT_ID, CLI_SCOPES, DEVICE_GRANT_TYPE, credentialPath, createProvider, loadCredentials, logout} from '../packages/cli/src/auth.js';
 import {checkUpdate, update} from '../packages/cli/src/update.js';
 import {evaluatePolicy, enforcePolicy} from '../packages/cli/src/policy.js';
 
 test('CIMD is a public native client with an exact client ID', () => {
-  const metadata = clientMetadata('https://hyper3d.com/oauth/cli.json');
-  assert.equal(metadata.client_id, 'https://hyper3d.com/oauth/cli.json');
+  const metadata = clientMetadata();
+  assert.equal(metadata.client_id, CLI_CLIENT_ID);
+  assert.equal(metadata.scope, CLI_SCOPES);
   assert.equal(metadata.token_endpoint_auth_method, 'none');
   assert.deepEqual(metadata.redirect_uris, []);
   assert.deepEqual(metadata.response_types, []);
   assert.deepEqual(metadata.grant_types, [DEVICE_GRANT_TYPE, 'refresh_token']);
-  assert.throws(() => clientMetadata('http://example.com/client.json'));
 });
 test('credentials are endpoint-bound, private, and removable', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'hyper3d-auth-'));
@@ -22,7 +22,7 @@ test('credentials are endpoint-bound, private, and removable', async () => {
   process.env.HYPER3D_CONFIG_DIR = directory;
   try {
     const endpoint = 'https://api.example.com/mcp';
-    const provider = createProvider(endpoint, {clientId: 'https://example.com/client.json'});
+    const provider = createProvider(endpoint, {});
     await provider.saveTokens({access_token: 'test-token', token_type: 'Bearer', expires_in: 60});
     assert.equal((await loadCredentials(endpoint)).tokens.access_token, 'test-token');
     assert.deepEqual(await loadCredentials('https://other.example.com/mcp'), {});

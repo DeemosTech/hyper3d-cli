@@ -4,7 +4,7 @@ import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {auth} from '@modelcontextprotocol/sdk/client/auth.js';
-import {login, createProvider, loadCredentials, DEVICE_GRANT_TYPE, DEFAULT_CLIENT_ID} from '../packages/cli/src/auth.js';
+import {login, createProvider, loadCredentials, DEVICE_GRANT_TYPE, CLI_CLIENT_ID, CLI_SCOPES} from '../packages/cli/src/auth.js';
 
 const endpoint = 'https://api.example.com/mcp';
 const issuer = 'https://auth.example.com';
@@ -20,14 +20,14 @@ function harness({polls = [], supported = true, expires = 600, interval = 5, com
       device_authorization_endpoint: supported ? `${issuer}/device_authorization` : undefined,
       token_endpoint_auth_methods_supported: ['none'], client_id_metadata_document_supported: true});
     const params = new URLSearchParams(init.body);
-    assert.equal(params.get('client_id'), DEFAULT_CLIENT_ID);
+    assert.equal(params.get('client_id'), CLI_CLIENT_ID);
     assert.equal(params.has('client_secret'), false);
     assert.equal(params.has('redirect_uri'), false);
     assert.equal(params.has('code_verifier'), false);
     if (url.pathname === '/device_authorization') {
       requests++;
       assert.equal(params.get('resource'), endpoint);
-      assert.equal(params.get('scope'), 'rodin:read offline_access');
+      assert.equal(params.get('scope'), CLI_SCOPES);
       return json({device_code: 'private-device-secret', user_code: 'ABCD-EFGH', verification_uri: `${issuer}/device`, verification_uri_complete: complete, expires_in: expires, interval});
     }
     assert.equal(url.href, `${issuer}/token`);
@@ -61,7 +61,7 @@ async function isolated(run) {
 
 test('device login opens complete URL, backs off, saves credentials and SDK refreshes without PKCE', () => isolated(async () => {
   const h = harness({polls: [json({error: 'authorization_pending'}, 400), json({error: 'slow_down'}, 400), new TypeError('network failed')]});
-  await login(endpoint, undefined, h.options);
+  await login(endpoint, h.options);
   assert.deepEqual(h.delays, [5000, 5000, 10000, 20000]);
   assert.deepEqual(h.opened, [`${issuer}/device?user_code=ABCD-EFGH`]);
   assert.match(h.output.join(''), /ABCD-EFGH/);
@@ -78,10 +78,10 @@ test('device login opens complete URL, backs off, saves credentials and SDK refr
 
 test('no-browser and browser launch failure both complete the same device flow', () => isolated(async () => {
   const h = harness();
-  await login(endpoint, undefined, {...h.options, browser: false});
+  await login(endpoint, {...h.options, browser: false});
   assert.deepEqual(h.opened, []);
   const failed = harness();
-  await login(endpoint, undefined, {...failed.options, open: async () => { throw new Error('no display'); }});
+  await login(endpoint, {...failed.options, open: async () => { throw new Error('no display'); }});
   assert.equal(failed.requests, 1);
   assert.match(failed.output.join(''), /manually/);
 }));
@@ -89,36 +89,36 @@ test('no-browser and browser launch failure both complete the same device flow',
 test('denial, expiration and invalid grant are terminal and do not save tokens', () => isolated(async () => {
   for (const error of ['access_denied', 'expired_token', 'invalid_grant']) {
     const h = harness({polls: [json({error}, 400)]});
-    await assert.rejects(login(endpoint, undefined, h.options), /denied|expired|invalid/);
+    await assert.rejects(login(endpoint, h.options), /denied|expired|invalid/);
     assert.equal(h.tokenParams.length, 1);
     assert.deepEqual(await loadCredentials(endpoint), {});
   }
   const h = harness({expires: 9, polls: [json({error: 'authorization_pending'}, 400)]});
-  await assert.rejects(login(endpoint, undefined, h.options), /expired/);
+  await assert.rejects(login(endpoint, h.options), /expired/);
   assert.equal(h.tokenParams.length, 1);
 }));
 
 test('unsupported discovery, unsafe URLs and cancellation never start fallback login', () => isolated(async () => {
   const unsupported = harness({supported: false});
-  await assert.rejects(login(endpoint, undefined, unsupported.options), /does not advertise Device Flow/);
+  await assert.rejects(login(endpoint, unsupported.options), /does not advertise Device Flow/);
   assert.equal(unsupported.requests, 0);
   for (const complete of ['javascript:alert(1)', 'https://other.example.com/device']) {
     const h = harness({complete});
-    await assert.rejects(login(endpoint, undefined, h.options), /HTTPS|origin mismatch/);
+    await assert.rejects(login(endpoint, h.options), /HTTPS|origin mismatch/);
     assert.deepEqual(h.opened, []);
   }
   const h = harness();
   const controller = new AbortController();
-  await assert.rejects(login(endpoint, undefined, {...h.options, signal: controller.signal,
+  await assert.rejects(login(endpoint, {...h.options, signal: controller.signal,
     open: async () => controller.abort(new Error('cancelled'))}), /cancelled/);
   assert.equal(h.tokenParams.length, 0);
 }));
 
 test('server throttling backs off and missing refresh credentials require explicit login', () => isolated(async () => {
   const h = harness({polls: [json({}, 429, {'Retry-After': '12'})]});
-  await login(endpoint, undefined, h.options);
+  await login(endpoint, h.options);
   assert.deepEqual(h.delays, [5000, 12000]);
-  const provider = createProvider(endpoint, {clientId: DEFAULT_CLIENT_ID});
+  const provider = createProvider(endpoint, {clientId: CLI_CLIENT_ID});
   await assert.rejects(auth(provider, {serverUrl: endpoint, fetchFn: h.options.fetchFn}), /auth login/);
 }));
 
@@ -135,7 +135,7 @@ test('device login preserves endpoint through OIDC discovery fallback', () => is
     }
     return originalFetch(input, init);
   };
-  await login(endpoint, undefined, {...h.options, fetchFn});
+  await login(endpoint, {...h.options, fetchFn});
   assert.equal(h.requests, 1);
   assert.equal((await loadCredentials(endpoint)).tokens.access_token, 'access');
 }));
