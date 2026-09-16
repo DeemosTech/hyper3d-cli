@@ -10,5 +10,5 @@
   ],
   "response_types": [],
   "token_endpoint_auth_method": "none",
-  "scope": "rodin:generate rodin:read offline_access"
+  "scope": "rodin:generate rodin:read account:read offline_access"
 }

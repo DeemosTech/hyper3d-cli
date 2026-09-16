@@ -56,13 +56,32 @@ does not advertise Device Flow. Existing MCP clients retain their own login flow
 The SDK handles OAuth discovery, resource validation and subsequent token
 requests. Normal MCP operations only refresh stored credentials; they never
 start interactive login. Existing refresh tokens can still be used if the server
-accepts them. `HYPER3D_CLIENT_ID` or `--client-id` overrides the default CIMD URL;
-`auth metadata --client-id <url>` generates the corresponding JSON. No DCR fallback.
+accepts them. The official client identity is fixed internally and cannot be
+overridden through CLI options, environment variables or stored credentials.
+No DCR fallback.
 
 Credentials are stored per endpoint in `~/.hyper3d` (directory mode 0700, token
 file mode 0600 on POSIX); they are not encrypted. On Windows, storage inherits
 the user's directory ACLs. `HYPER3D_CONFIG_DIR` can change that directory.
-`auth status` only reports local credential presence, not remote validity.
+`auth status` (alias `auth info`) verifies credentials by calling the existing
+`POST /api/user/get_info` HTTP API. It displays the username, user UUID, and the
+balance/frozen credits of the authorized billing workspace. For team grants it
+also calls `POST /api/group/group_info` with the group UUID returned by the server.
+It does not call MCP tools or query wallet usage. Expired stored access tokens
+are refreshed once; environment tokens are used as supplied. Without credentials
+it returns `{ "authenticated": false }`. Authentication, server and network errors
+fail explicitly rather than reporting a verified login.
+
+The CLI explicitly requests `rodin:generate rodin:read account:read offline_access`;
+it never requests every scope advertised by discovery. Deploy backend support for
+`account:read` and the updated official CIMD before using account lookup. Existing
+users must run `hyper3d auth login` again to grant the new permission. Refreshing
+an older grant does not add scopes. Existing MCP tool permissions and the public
+MCP discovery scope list remain unchanged.
+
+The internal `expiresAt` credential field records access-token expiry in Unix
+milliseconds, not refresh-token expiry. Status output omits client metadata,
+credential storage details and tokens.
 Logout removes local credentials; it does not revoke the server-side grant.
 
 For automation, pass an **OAuth access token valid for this MCP resource** via

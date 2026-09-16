@@ -9,17 +9,15 @@ import {discoverOAuthProtectedResourceMetadata, discoverAuthorizationServerMetad
 import {OAuthTokensSchema} from '@modelcontextprotocol/sdk/shared/auth.js';
 
 export const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
-export const DEFAULT_CLIENT_ID = 'https://hyper3d.ai/oauth_cimd/cli.json';
-export function clientMetadata(clientId) {
-  const url = new URL(clientId);
-  if (url.protocol !== 'https:' || url.pathname === '/' || url.hash || url.username || url.password)
-    throw new Error('CIMD client ID must be an HTTPS document URL without credentials or fragment');
+export const CLI_CLIENT_ID = 'https://hyper3d.ai/oauth_cimd/cli.json';
+export const CLI_SCOPES = 'rodin:generate rodin:read account:read offline_access';
+export function clientMetadata() {
   return {
-    client_id: clientId, client_name: 'Hyper3D CLI',
+    client_id: CLI_CLIENT_ID, client_name: 'Hyper3D CLI',
     client_uri: 'https://github.com/DeemosTech/hyper3d-cli',
     application_type: 'native', redirect_uris: [],
     grant_types: [DEVICE_GRANT_TYPE, 'refresh_token'], response_types: [],
-    token_endpoint_auth_method: 'none', scope: 'rodin:generate rodin:read offline_access',
+    token_endpoint_auth_method: 'none', scope: CLI_SCOPES,
   };
 }
 export function credentialPath(endpoint) {
@@ -41,12 +39,16 @@ async function saveCredentials(endpoint, data) {
 }
 export async function logout(endpoint) { await rm(credentialPath(endpoint), {force: true}); }
 
+
 export function createProvider(endpoint, data) {
-  const metadata = clientMetadata(data.clientId);
+  if (data.clientId && data.clientId !== CLI_CLIENT_ID)
+    throw new Error('Stored credentials belong to a different client. Run hyper3d auth login again.');
+  data = {...data, clientId: CLI_CLIENT_ID};
+  const metadata = clientMetadata();
   return {
-    clientMetadataUrl: data.clientId,
+    clientMetadataUrl: CLI_CLIENT_ID,
     get clientMetadata() { const {client_id, ...rest} = metadata; return rest; },
-    clientInformation: () => ({client_id: data.clientId}),
+    clientInformation: () => ({client_id: CLI_CLIENT_ID}),
     tokens: () => data.tokens,
     saveTokens: async tokens => {
       data.tokens = {...tokens, refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token};
@@ -67,7 +69,7 @@ export function createProvider(endpoint, data) {
   };
 }
 
-function secureUrl(value) {
+export function secureUrl(value) {
   const url = new URL(value);
   if (url.username || url.password || url.hash ||
       (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))))
@@ -87,18 +89,18 @@ function oauthFailure(body, status) {
     expired_token: 'Device code expired. Run hyper3d auth login again.',
     invalid_grant: 'Device authorization is invalid or already used. Run hyper3d auth login again.',
     unauthorized_client: 'Device Flow is not enabled for this CLI client.',
-    invalid_client: 'CLI client metadata was rejected. Check the published CIMD.',
+    invalid_client: 'The server rejected this CLI. Update Hyper3D CLI or contact support.',
   };
   return new Error(messages[body?.error] ?? `OAuth request failed (HTTP ${status}).`);
 }
 
-export async function login(endpoint, clientId = DEFAULT_CLIENT_ID, {
+export async function login(endpoint, {
   browser = true, fetchFn = fetch, open = openBrowser,
   write = text => process.stderr.write(text), wait = sleep, now = Date.now,
   signal,
 } = {}) {
   secureUrl(endpoint);
-  const provider = createProvider(endpoint, {clientId});
+  const provider = createProvider(endpoint, {});
   const cancelled = new AbortController();
   const stop = () => cancelled.abort(new Error('Login cancelled'));
   process.once('SIGINT', stop);
@@ -134,8 +136,8 @@ export async function login(endpoint, clientId = DEFAULT_CLIENT_ID, {
       throw new Error('The server does not advertise Device Flow. Deploy and enable the backend before logging in.');
     secureUrl(metadata.token_endpoint);
     const resource = String(await selectResourceURL(new URL(endpoint), provider, resourceMetadata));
-    const scope = [...new Set([...(resourceMetadata.scopes_supported ?? ['rodin:generate', 'rodin:read']), 'offline_access'])].join(' ');
-    const response = await post(deviceAuthorizationEndpoint, {client_id: clientId, resource, scope});
+    const scope = CLI_SCOPES;
+    const response = await post(deviceAuthorizationEndpoint, {client_id: CLI_CLIENT_ID, resource, scope});
     const device = await response.json();
     if (!response.ok) throw oauthFailure(device, response.status);
     if (typeof device.device_code !== 'string' || !device.device_code ||
@@ -162,7 +164,7 @@ export async function login(endpoint, clientId = DEFAULT_CLIENT_ID, {
       let tokenResponse;
       try {
         tokenResponse = await post(metadata.token_endpoint, {
-          grant_type: DEVICE_GRANT_TYPE, client_id: clientId, device_code: device.device_code,
+          grant_type: DEVICE_GRANT_TYPE, client_id: CLI_CLIENT_ID, device_code: device.device_code,
         }, pollSignal);
       } catch (error) {
         pollSignal.throwIfAborted();
