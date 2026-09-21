@@ -143,6 +143,6 @@ newer version and never downgrades a pinned installation.
 Use `--endpoint <url>` for a custom Hyper3D MCP endpoint. HTTPS is required except
 for localhost. `HYPER3D_CONFIG_DIR` changes the credential and update-cache directory.
 
-For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[release guide](docs/releasing.md). Report problems in
+For development and releases, see [CONTRIBUTING.md](https://github.com/DeemosTech/hyper3d-cli/blob/main/CONTRIBUTING.md) and the
+[release guide](https://github.com/DeemosTech/hyper3d-cli/blob/main/docs/releasing.md). Report problems in
 [GitHub Issues](https://github.com/DeemosTech/hyper3d-cli/issues).
