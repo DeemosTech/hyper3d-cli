@@ -1,17 +1,13 @@
 import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
 
 import { loadCredentials, createProvider, secureUrl } from './auth.js';
+import { resolveEndpoints } from './endpoints.js';
 
 const WALLET_UNITS_PER_CREDIT = 10;
 
-export async function accountInfo(endpoint: string, { fetchFn = fetch } = {}) {
-  const base = secureUrl(endpoint);
-  if (!base.pathname.replace(/\/$/, '').endsWith('/mcp'))
-    throw new Error(
-      'Account lookup requires a Hyper3D endpoint ending in /mcp.',
-    );
-  base.pathname = base.pathname.replace(/\/mcp\/?$/, '/');
-  base.search = '';
+export async function accountInfo(baseUrl: string, { fetchFn = fetch } = {}) {
+  const endpoints = resolveEndpoints(baseUrl);
+  const endpoint = endpoints.mcp;
   const data = await loadCredentials(endpoint);
   const provider = data.clientId ? createProvider(endpoint, data) : undefined;
   let accessToken = data.tokens?.access_token;
@@ -27,7 +23,7 @@ export async function accountInfo(endpoint: string, { fetchFn = fetch } = {}) {
   };
   const post = async (path: string, body: Record<string, unknown>) => {
     const send = async () =>
-      request(new URL(path, base), {
+      request(path, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -62,7 +58,7 @@ export async function accountInfo(endpoint: string, { fetchFn = fetch } = {}) {
     return result;
   };
   const { meta, billing_workspace: workspace } = await post(
-    'user/get_info',
+    endpoints.userInfo,
     {},
   );
   if (
@@ -112,7 +108,7 @@ export async function accountInfo(endpoint: string, { fetchFn = fetch } = {}) {
     typeof workspace.group_uuid === 'string' &&
     workspace.group_uuid
   ) {
-    const result = await post('group/group_info', {
+    const result = await post(endpoints.groupInfo, {
       group_uuid: workspace.group_uuid,
     });
     if (result.group_meta?.uuid !== workspace.group_uuid)

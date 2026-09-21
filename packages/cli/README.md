@@ -140,8 +140,18 @@ newer version and never downgrades a pinned installation.
   processes and remove the empty `~/.hyper3d/update.lock` directory, then run
   `hyper3d update`.
 
-Use `--endpoint <url>` for a custom Hyper3D MCP endpoint. HTTPS is required except
-for localhost. `HYPER3D_CONFIG_DIR` changes the credential and update-cache directory.
+The API base URL defaults to `https://api.hyper3d.com/api`. Set `BASE_URL` to
+use another environment; a trailing slash is optional:
+
+```sh
+BASE_URL=https://api.hyper3d.com/api/ hyper3d auth status
+hyper3d --base-url https://api.hyper3d.com/api auth status
+```
+
+`--base-url` overrides `BASE_URL`. MCP (`mcp`), account (`user/get_info`) and
+team (`group/group_info`) endpoints are derived from this base. HTTPS is required
+except for localhost. OAuth endpoints remain server-discovered, and upload/result
+URLs remain server-provided. `HYPER3D_CONFIG_DIR` changes the credential and update-cache directory.
 
 For development and releases, see [CONTRIBUTING.md](https://github.com/DeemosTech/hyper3d-cli/blob/main/CONTRIBUTING.md) and the
 [release guide](https://github.com/DeemosTech/hyper3d-cli/blob/main/docs/releasing.md). Report problems in

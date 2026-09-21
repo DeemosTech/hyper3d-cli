@@ -130,5 +130,8 @@ detect changes in business semantics. Tool absence can also be due to scopes.
 
 Other command failures and tool `isError` results exit 1; success exits 0.
 
-`--endpoint` or `HYPER3D_MCP_URL` overrides the default
-`https://api.hyper3d.com/api/mcp`. HTTPS is required except on loopback hosts.
+`--base-url` or `BASE_URL` overrides the default `https://api.hyper3d.com/api`.
+A trailing slash is optional. MCP and account endpoints are resolved relative to
+this base; credentials remain keyed by the derived MCP URL, so the two spellings
+share the same login. HTTPS is required except on loopback hosts. OAuth endpoints
+are discovered through server metadata rather than guessed from the base URL.

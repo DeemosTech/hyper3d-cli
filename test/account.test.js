@@ -15,7 +15,8 @@ import {
   CLI_CLIENT_ID,
 } from '../packages/cli/dist/auth.js';
 
-const endpoint = 'https://api.example.com/api/mcp';
+const baseUrl = 'https://api.example.com/api';
+const endpoint = `${baseUrl}/mcp`;
 const user = {
   user_uuid: 'user-1',
   username: 'fixture',
@@ -46,7 +47,7 @@ async function isolated(run) {
 test('account status without credentials makes no network requests', () =>
   isolated(async () => {
     assert.deepEqual(
-      await accountInfo(endpoint, {
+      await accountInfo(baseUrl, {
         fetchFn: () => assert.fail('unexpected request'),
       }),
       { authenticated: false },
@@ -59,12 +60,8 @@ test('personal account status uses the account HTTP API and its authorized walle
       access_token: 'fixture-token',
       token_type: 'Bearer',
     });
-    await createProvider(`${endpoint}/?ignored=yes`, {}).saveTokens({
-      access_token: 'fixture-token',
-      token_type: 'Bearer',
-    });
     const calls = [];
-    const result = await accountInfo(`${endpoint}/?ignored=yes`, {
+    const result = await accountInfo(`${baseUrl}/`, {
       fetchFn: async (input, init) => {
         calls.push(new URL(input).href);
         assert.equal(init.method, 'POST');
@@ -95,7 +92,7 @@ test('team account status requests only the team bound to the grant', () =>
       token_type: 'Bearer',
     });
     const calls = [];
-    const result = await accountInfo(endpoint, {
+    const result = await accountInfo(baseUrl, {
       fetchFn: async (input, init) => {
         calls.push([new URL(input).pathname, JSON.parse(init.body)]);
         return calls.length === 1
@@ -135,7 +132,7 @@ test('account status reports HTTP, server and network errors without treating th
     ]) {
       let calls = 0;
       await assert.rejects(
-        accountInfo(endpoint, {
+        accountInfo(baseUrl, {
           fetchFn: async () => {
             calls++;
             return json({}, status);
@@ -146,13 +143,13 @@ test('account status reports HTTP, server and network errors without treating th
       assert.equal(calls, 1);
     }
     await assert.rejects(
-      accountInfo(endpoint, {
+      accountInfo(baseUrl, {
         fetchFn: async () => json({ error: 'fixture error' }),
       }),
       /fixture error/,
     );
     await assert.rejects(
-      accountInfo(endpoint, {
+      accountInfo(baseUrl, {
         fetchFn: async () => {
           throw new TypeError('offline');
         },
@@ -209,12 +206,12 @@ test('account status rejects missing workspace, invalid identity and invalid wal
       ],
     ])
       await assert.rejects(
-        accountInfo(endpoint, { fetchFn: async () => json(body) }),
+        accountInfo(baseUrl, { fetchFn: async () => json(body) }),
         message,
       );
     let calls = 0;
     await assert.rejects(
-      accountInfo(endpoint, {
+      accountInfo(baseUrl, {
         fetchFn: async () =>
           ++calls === 1
             ? json({
@@ -240,7 +237,7 @@ test('account status refreshes stored credentials once and retries with the new 
     });
     let accountCalls = 0,
       refreshCalls = 0;
-    const result = await accountInfo(endpoint, {
+    const result = await accountInfo(baseUrl, {
       fetchFn: async (input, init) => {
         const url = new URL(input);
         if (url.pathname.includes('oauth-protected-resource'))
@@ -316,8 +313,8 @@ test('auth status and info alias support human and JSON output; authorization er
         process.execPath,
         [
           executable,
-          '--endpoint',
-          `http://127.0.0.1:${server.address().port}/api/mcp`,
+          '--base-url',
+          `http://127.0.0.1:${server.address().port}/api`,
           'auth',
           command,
           ...(output ? ['--output', output] : []),

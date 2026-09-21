@@ -7,6 +7,7 @@ import { Command, Option } from 'commander';
 import { accountInfo } from './account.js';
 import { login, logout } from './auth.js';
 import { currentContractVersion, getContract } from './contracts/index.js';
+import { DEFAULT_BASE_URL, resolveEndpoints } from './endpoints.js';
 import { withClient, listTools } from './mcp.js';
 import { createOperations } from './operations.js';
 import { formatOutput } from './output.js';
@@ -34,17 +35,18 @@ const cli = new Command()
     currentContractVersion,
   )
   .option(
-    '--endpoint <url>',
-    'MCP endpoint',
-    process.env.HYPER3D_MCP_URL ?? 'https://api.hyper3d.com/api/mcp',
+    '--base-url <url>',
+    'Hyper3D API base URL (overrides BASE_URL)',
+    process.env.BASE_URL ?? DEFAULT_BASE_URL,
   )
   .addOption(
     new Option('--output <format>', 'Output format')
       .choices(['human', 'json'])
       .default('human'),
   );
+const endpoints = () => resolveEndpoints(cli.opts().baseUrl);
 const connect = async (action: (client: Client) => Promise<void>) =>
-  withClient({ endpoint: cli.opts().endpoint, version: pkg.version }, action);
+  withClient({ endpoint: endpoints().mcp, version: pkg.version }, action);
 cli.hook('preAction', async (_root, command) => {
   if (
     command.parent === cli &&
@@ -66,18 +68,18 @@ authentication
     'Print the verification link and code without opening a browser',
   )
   .action(async (options) => {
-    await login(cli.opts().endpoint, { browser: options.browser });
+    await login(endpoints().mcp, { browser: options.browser });
     print({ authenticated: true }, 'auth-login');
   });
 authentication.command('logout').action(async () => {
-  await logout(cli.opts().endpoint);
+  await logout(endpoints().mcp);
   print({ localCredentialsRemoved: true }, 'auth-logout');
 });
 authentication
   .command('status')
   .alias('info')
   .description('Show your account and authorized wallet credit balances')
-  .action(async () => print(await accountInfo(cli.opts().endpoint), 'account'));
+  .action(async () => print(await accountInfo(endpoints().baseUrl), 'account'));
 const operation = async (
   action: (ops: ReturnType<typeof createOperations>) => Promise<void>,
 ) => {

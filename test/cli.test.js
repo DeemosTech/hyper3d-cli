@@ -80,7 +80,7 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       return {
         ...(await exec(
           process.execPath,
-          [executable, '--endpoint', endpoint, ...args],
+          [executable, '--base-url', endpoint.replace(/\/mcp$/, ''), ...args],
           {
             env: {
               ...process.env,
