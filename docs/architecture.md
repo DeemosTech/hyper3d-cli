@@ -99,8 +99,8 @@ integer timeout in seconds. It automatically chains wait-tool calls of at most
 
 ## Operation contracts
 
-`--schema-version v1` explicitly selects the schema and implementation together
-(default: `v1`).
+The CLI selects its current bundled contract internally (currently `v1`).
+There is no public schema-version option.
 `src/contracts/<version>/` contains each contract's schema and implementation;
 authentication and transport are shared. There is currently one real contract.
 When a breaking wire/behavior change requires another implementation, retain the
@@ -121,6 +121,13 @@ claim that billable operations were exercised.
 Named operations validate actual input against the **remote** schema. A breaking
 change in the abstract does not block an operation whose actual input satisfies
 the current remote schema. The SDK validates declared structured outputs.
+
+The bundled snapshot describes the CLI's known contract; it does not establish
+whether a CLI release is outdated. Additive server changes may remain compatible,
+and schema differences cannot detect changed semantics. Normal commands validate
+their actual input rather than running a full schema diff. A newer npm version
+indicates an available update; an explicit minimum-version policy is needed to
+require an upgrade. No production minimum-version policy URL is configured yet.
 
 The compatibility analyzer deliberately handles a limited subset: required
 fields and enum narrowing are recognized; other constraint/type/output changes

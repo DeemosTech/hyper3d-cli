@@ -102,6 +102,7 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.equal(help.code, 0, help.stderr);
     assert.doesNotMatch(help.stdout, /^\s+(tools|schema)(?:\s|$)/m);
     assert.match(help.stdout, /--output <format>/);
+    assert.doesNotMatch(help.stdout, /--schema-version/);
     const generated = await run([
       'generate',
       '--prompt',
@@ -136,13 +137,13 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.match(invalidOutput.stderr, /Allowed choices are human, json/);
     const unsupported = await run([
       '--schema-version',
-      'v99',
+      'v1',
       'generate',
       '--prompt',
       'a cat',
     ]);
     assert.equal(unsupported.code, 1);
-    assert.match(unsupported.stderr, /Unsupported schema version/);
+    assert.match(unsupported.stderr, /unknown option '--schema-version'/);
     const failed = await run([
       'poll',
       'd1bb98f2-48be-4be1-9818-d49de002497a',

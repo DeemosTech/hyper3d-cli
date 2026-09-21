@@ -6,7 +6,7 @@ import { Command, Option } from 'commander';
 
 import { accountInfo } from './account.js';
 import { login, logout } from './auth.js';
-import { currentContractVersion, getContract } from './contracts/index.js';
+import { getContract } from './contracts/index.js';
 import { DEFAULT_BASE_URL, resolveEndpoints } from './endpoints.js';
 import { withClient, listTools } from './mcp.js';
 import { createOperations } from './operations.js';
@@ -20,7 +20,6 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 const pkg = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 );
-const selectedContract = () => getContract(cli.opts().schemaVersion);
 const print = (value: Payload, kind?: string) => {
   process.stdout.write(
     `${formatOutput(value, { format: cli.opts().output, kind })}\n`,
@@ -29,11 +28,6 @@ const print = (value: Payload, kind?: string) => {
 const cli = new Command()
   .name('hyper3d')
   .version(pkg.version)
-  .option(
-    '--schema-version <version>',
-    'Operation contract version',
-    currentContractVersion,
-  )
   .option(
     '--base-url <url>',
     'Hyper3D API base URL (overrides BASE_URL)',
@@ -83,7 +77,7 @@ authentication
 const operation = async (
   action: (ops: ReturnType<typeof createOperations>) => Promise<void>,
 ) => {
-  const contract = selectedContract();
+  const contract = getContract();
   return connect(async (client) =>
     action(createOperations(client, contract, await listTools(client))),
   );
