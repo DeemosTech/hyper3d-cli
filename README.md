@@ -26,7 +26,7 @@ yarn dlx @hyper3d/cli@latest --help
 ```
 
 For a project-local installation, run `npm install --save-dev @hyper3d/cli`, then
-`npx hyper3d --help`. To try the latest main-branch build, use `@hyper3d/cli@next`
+`npx hyper3d --help`. To try the latest beta build, use `@hyper3d/cli@beta`
 in place of `@hyper3d/cli`.
 
 ## Sign in
@@ -107,7 +107,7 @@ hyper3d update
 
 An interactive **npm global installation** checks for updates once a day before
 model commands and only displays an update notice by default. Stable installations
-follow `latest`; main-branch builds follow `next`. Run `hyper3d update` to install
+follow `latest`; prerelease-branch builds follow `beta`. Run `hyper3d update` to install
 an available update.
 
 Set `HYPER3D_AUTO_UPDATE=1` to opt into automatic installation (which asks you to
@@ -129,7 +129,7 @@ npx @hyper3d/cli@latest --help
 ```
 
 To switch channels explicitly, install `@hyper3d/cli@latest` or
-`@hyper3d/cli@next` with your package manager. `hyper3d update` only upgrades to a
+`@hyper3d/cli@beta` with your package manager. `hyper3d update` only upgrades to a
 newer version and never downgrades a pinned installation.
 
 ## Troubleshooting

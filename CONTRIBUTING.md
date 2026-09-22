@@ -1,8 +1,22 @@
 # Contributing
 
-Use Node.js 22+ and npm. `main` is the current integration branch. Create a feature
-or fix branch and open a pull request targeting `main`; do not develop directly
-on main.
+Use Node.js 22+ and npm. Create development branches from `prerelease` and open
+feature/fix pull requests targeting `prerelease`. Only the repository's
+`prerelease` branch may open a release PR targeting `main`.
+
+CI enforces development version >= prerelease and the resulting prerelease
+version > main. Release PRs require prerelease version > main. Source versions
+must be stable `X.Y.Z` values and match `package-lock.json`; beta suffixes are
+added only during publishing. After a stable release, bump the target version in
+the next development PR, for example:
+
+```sh
+npm version 0.1.1 --workspace @hyper3d/cli --no-git-tag-version
+```
+
+PRs run CI once; pushing a development branch without a PR does not trigger CI.
+Use a draft PR for early checks. New PR commits cancel obsolete checks. Merge
+commits when promoting prerelease to main preserve the shared branch history.
 
 ```sh
 npm ci

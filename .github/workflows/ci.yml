@@ -1,13 +1,29 @@
 name: CI
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches-ignore: [main]
+    branches: [main, prerelease]
+    types: [opened, synchronize, reopened, edited]
   workflow_call:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  policy:
+    name: Release policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/check-release-policy.mjs
   test:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
     strategy:
@@ -31,10 +47,11 @@ jobs:
   checks:
     name: CI checks
     if: always()
-    needs: test
+    needs: [policy, test]
     runs-on: ubuntu-latest
     steps:
       - name: Require all platforms
         env:
           RESULT: ${{ needs.test.result }}
-        run: test "$RESULT" = success
+          POLICY: ${{ needs.policy.result }}
+        run: test "$RESULT" = success && test "$POLICY" = success

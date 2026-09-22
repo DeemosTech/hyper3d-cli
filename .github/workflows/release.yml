@@ -1,8 +1,7 @@
 name: Release
 on:
   push:
-    branches: [main]
-    tags: ['v*']
+    branches: [main, prerelease]
 permissions:
   contents: read
 # Serialize publications across both channels. Never cancel an in-flight publish.
@@ -26,8 +25,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
       - run: npm ci --ignore-scripts
+      - run: node scripts/check-release-policy.mjs
       - name: Select and validate release version
         id: release
         run: node scripts/release-version.mjs
@@ -35,6 +34,15 @@ jobs:
         env:
           RELEASE_CHANNEL: ${{ steps.release.outputs.channel }}
         run: node scripts/verify-registry-version.mjs
+      - name: Require an unused stable tag
+        if: steps.release.outputs.channel == 'latest'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            echo "Tag v$VERSION already exists; recover the existing release instead."
+            exit 1
+          fi
       - run: npm run test:install
       - name: Pack release artifact
         run: |
@@ -44,6 +52,7 @@ jobs:
         with:
           name: npm-package
           path: release/*.tgz
+          retention-days: 14
       - name: Publish with npm trusted publishing
         env:
           CHANNEL: ${{ steps.release.outputs.channel }}
@@ -52,5 +61,5 @@ jobs:
         if: steps.release.outputs.channel == 'latest'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" release/*.tgz --verify-tag --generate-notes
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gh release create "v$VERSION" release/*.tgz --target "$GITHUB_SHA" --generate-notes
