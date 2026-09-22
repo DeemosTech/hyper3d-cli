@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, readFile, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
@@ -34,6 +34,28 @@ try {
     ),
   );
   const tarball = join(temporary, packed[0].filename);
+  // Exercise npm's publication parser with the same relative artifact layout as CI.
+  await mkdir(join(temporary, 'release'));
+  await copyFile(tarball, join(temporary, 'release', packed[0].filename));
+  const publication = JSON.parse(
+    npm(
+      [
+        'publish',
+        `./release/${packed[0].filename}`,
+        '--dry-run',
+        '--json',
+        '--access',
+        'public',
+        '--tag',
+        'beta',
+      ],
+      temporary,
+    ),
+  );
+  // Newer npm versions group publish JSON by package name; older versions do not.
+  const publishedPackage = publication[packed[0].name] ?? publication;
+  assert.equal(publishedPackage.id, packed[0].id);
+  assert.equal(publishedPackage.integrity, packed[0].integrity);
   const prefix = join(temporary, 'global');
   npm([
     'install',
@@ -133,7 +155,7 @@ try {
     assert.equal(output.trim(), expected);
   }
   console.log(
-    'Tarball, npm global/local/one-off execution, pnpm and Yarn installs passed.',
+    'Tarball publication dry-run, npm global/local/one-off execution, pnpm and Yarn installs passed.',
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });
