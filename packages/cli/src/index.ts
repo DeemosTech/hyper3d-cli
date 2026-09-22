@@ -91,17 +91,27 @@ authentication
 cli
   .command('generate')
   .description('Generate a model from text and/or local reference images')
-  .option('--prompt <text>', 'Model description')
+  .option('--prompt <text>', 'Model description; required without --image')
   .option(
     '--image <path>',
-    'Reference image; repeat for up to five images',
+    'Reference image; repeat for up to five images; required without --prompt',
     (path: string, paths: string[]) => [...paths, path],
     [],
   )
-  .option('--tier <tier>', 'Generation tier')
-  .option('--mesh-mode <mode>', 'Mesh mode, e.g. Raw or Quad')
-  .option('--format <format>', 'Geometry format, e.g. glb')
-  .option('--quality <count>', 'Target polygon count', Number)
+  .option(
+    '--tier <tier>',
+    'Generation tier: Gen-2.5-Medium, Gen-2.5-High, Gen-2.5-Extreme-Low (server default: Gen-2.5-Medium)',
+  )
+  .option('--mesh-mode <mode>', 'Mesh mode: Raw, Quad (server default: Raw)')
+  .option(
+    '--format <format>',
+    'Geometry format: glb, usdz, fbx, obj, stl (server default: glb)',
+  )
+  .option(
+    '--quality <count>',
+    'Target polygon count: Raw 500-1,000,000, Quad 1,000-50,000 (server default: Raw 500,000, Quad 18,000)',
+    Number,
+  )
   .action(async (options) => print(await generate(options)));
 
 // poll
@@ -124,9 +134,19 @@ cli
 cli
   .command('bang <generation-id>')
   .description('Run BANG to separate a completed model into parts')
-  .option('--instruction <text>', 'Parts to separate')
-  .option('--strength <count>', 'Target part count', Number)
-  .option('--format <format>', 'Geometry format')
+  .option(
+    '--instruction <text>',
+    'Parts to separate; omit for automatic split planning',
+  )
+  .option(
+    '--strength <count>',
+    'Soft target part count, 1-12; actual count may vary (server default: 5)',
+    Number,
+  )
+  .option(
+    '--format <format>',
+    'Geometry format: glb, usdz, fbx, obj, stl (server default: glb)',
+  )
   .action(async (id, options) => print(await bang(id, options)));
 
 // update
