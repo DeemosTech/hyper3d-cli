@@ -1,15 +1,16 @@
 # Hyper3D CLI
 
-Generate 3D models from text or images, follow their progress, and get the finished
-files from your terminal.
+Generate Rodin Gen-2.5 3D models from text or reference images, split completed
+models into parts with BANG, and retrieve download links from your terminal.
+Use readable output interactively or JSON output in scripts.
 
 ## Install
 
-Requires **Node.js 22 or newer**. The package is being prepared for its first npm
-release; the registry commands below become available after that release.
+Requires **Node.js 22 or newer** and a Hyper3D account. Install the stable release:
 
 ```sh
-npm install --global @hyper3d/cli
+npm install --global @hyper3d/cli@latest
+hyper3d --version
 hyper3d --help
 ```
 
@@ -26,8 +27,8 @@ yarn dlx @hyper3d/cli@latest --help
 ```
 
 For a project-local installation, run `npm install --save-dev @hyper3d/cli`, then
-`npx hyper3d --help`. To try the latest beta build, use `@hyper3d/cli@beta`
-in place of `@hyper3d/cli`.
+`npx hyper3d --help`. For preview builds or switching from beta to stable, see
+[Updates](#updates).
 
 ## Sign in
 
@@ -50,7 +51,8 @@ Signing out locally does not revoke your server-side authorization.
 
 ## Generate a model
 
-Generation uses credits from your authorized workspace.
+Generation uses credits from the personal or team workspace you authorized at
+sign-in. Run `hyper3d auth status` to check that workspace and its credit balances.
 
 ```sh
 # From text
@@ -73,7 +75,7 @@ Provide a prompt, one to five images, or both. Generation options:
 | `--quality`   | Target polygon count: Raw `500–1,000,000`; Quad `1,000–50,000` | Raw `500,000`; Quad `18,000` |
 
 Defaults are applied by the server. The response includes a generation ID; use
-it to check progress and retrieve the result:
+it in place of `<generation-id>` to check progress and retrieve the result:
 
 ```sh
 hyper3d status <generation-id>
@@ -81,10 +83,15 @@ hyper3d poll <generation-id> --timeout 300
 hyper3d result <generation-id>
 ```
 
-`poll` waits up to the requested number of seconds. `result` returns download URLs;
-it does not download files to your machine.
+`status` checks progress once. `poll` waits until generation finishes or the
+timeout expires (30 seconds by default). A polling timeout does not cancel the
+generation; run `status` or `poll` again to keep following it. Once generation
+completes, `result` returns download URLs; it does not save files to your machine.
 
-To separate a completed model into parts:
+## Split a model with BANG
+
+Pass a completed model's generation ID to BANG. Omit `--instruction` for automatic
+split planning, or describe the parts you want to separate:
 
 ```sh
 hyper3d bang <generation-id> --instruction "separate the handle and lid"
@@ -95,6 +102,9 @@ hyper3d bang <generation-id> --instruction "separate the handle and lid"
 | `--instruction` | Description of the parts to separate                                              | Automatic split planning |
 | `--strength`    | Integer `1–12`; soft target for the number of parts, so the actual count may vary | `5`                      |
 | `--format`      | `glb`, `usdz`, `fbx`, `obj`, `stl`                                                | `glb`                    |
+
+BANG uses credits and returns a new generation ID. Use that new ID with `status`,
+`poll`, and `result` to follow the split and retrieve its output.
 
 Run `hyper3d <command> --help` for more options. If a generation request times out,
 check your existing tasks before submitting it again; the CLI never retries
@@ -115,15 +125,19 @@ exit with code `1`.
 
 ## Updates
 
+For a global npm installation:
+
 ```sh
 hyper3d update --check
 hyper3d update
 ```
 
+`update --check` reports the installed version, the channel's target version, and
+whether an update is available. `update` installs it when the target is newer.
+Stable versions follow `latest`; beta versions follow `beta`.
+
 An interactive **npm global installation** checks for updates once a day before
-model commands and only displays an update notice by default. Stable installations
-follow `latest`; prerelease-branch builds follow `beta`. Run `hyper3d update` to install
-an available update.
+model commands and only displays an update notice by default.
 
 Set `HYPER3D_AUTO_UPDATE=1` to opt into automatic installation (which asks you to
 rerun your command before submitting the model operation), or
@@ -143,9 +157,37 @@ npm install --save-dev @hyper3d/cli@latest
 npx @hyper3d/cli@latest --help
 ```
 
-To switch channels explicitly, install `@hyper3d/cli@latest` or
-`@hyper3d/cli@beta` with your package manager. `hyper3d update` only upgrades to a
-newer version and never downgrades a pinned installation.
+Beta installations continue following beta after a stable release. To switch
+channels explicitly, install the desired tag with your package manager:
+
+```sh
+# Switch to the stable release, including from beta
+npm install --global @hyper3d/cli@latest
+
+# Opt into beta builds
+npm install --global @hyper3d/cli@beta
+```
+
+`hyper3d update` only installs newer versions. Reinstalling a tag explicitly also
+lets you switch to a channel whose current version is older than yours.
+
+## Configuration
+
+The defaults work with the public Hyper3D service. To use another environment:
+
+```sh
+hyper3d --base-url https://api.hyper3d.com/api auth status
+```
+
+| Setting                | Purpose                                                           | Default                       |
+| ---------------------- | ----------------------------------------------------------------- | ----------------------------- |
+| `BASE_URL`             | API base URL; `--base-url` takes precedence                       | `https://api.hyper3d.com/api` |
+| `HYPER3D_CONFIG_DIR`   | Directory for credentials and update state                        | `~/.hyper3d`                  |
+| `HYPER3D_AUTO_UPDATE`  | Set to `1` to install updates automatically before model commands | Disabled                      |
+| `HYPER3D_UPDATE_CHECK` | Set to `0` to disable automatic update checks and installation    | Enabled                       |
+
+API URLs require HTTPS except for localhost. Use a nonempty absolute path when
+setting `HYPER3D_CONFIG_DIR`.
 
 ## Troubleshooting
 
@@ -161,24 +203,7 @@ newer version and never downgrades a pinned installation.
   directory (`~/.hyper3d` by default, or the directory set by `HYPER3D_CONFIG_DIR`),
   then run `hyper3d update`.
 
-The API base URL defaults to `https://api.hyper3d.com/api`. Set `BASE_URL` to
-use another environment; a trailing slash is optional:
-
-```sh
-BASE_URL=https://api.hyper3d.com/api/ hyper3d auth status
-hyper3d --base-url https://api.hyper3d.com/api auth status
-```
-
-`--base-url` overrides `BASE_URL`. MCP (`mcp`), account (`user/get_info`) and
-team (`group/group_info`) endpoints are derived from this base. HTTPS is required
-except for localhost. OAuth endpoints remain server-discovered, and upload/result
-URLs remain server-provided.
-
-`HYPER3D_CONFIG_DIR` changes the directory for credentials, the update cache
-(`update-check.json`), and the update lock (`update.lock`). If unset, it defaults to
-`~/.hyper3d`. Relative paths resolve from the current working directory; an empty
-value uses the current working directory rather than the default. Use a nonempty
-absolute path for a consistent location across commands.
+## Contributing and support
 
 For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [release guide](docs/releasing.md). Report problems in
