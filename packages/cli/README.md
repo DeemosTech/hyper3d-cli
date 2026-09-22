@@ -63,8 +63,17 @@ hyper3d generate --image ./reference.png
 hyper3d generate --image ./front.png --image ./side.jpg --prompt "a ceramic teapot"
 ```
 
-You can provide up to five images. The response includes a generation ID; use it
-to check progress and retrieve the result:
+Provide a prompt, one to five images, or both. Generation options:
+
+| Option        | Accepted values                                                | Default when omitted         |
+| ------------- | -------------------------------------------------------------- | ---------------------------- |
+| `--tier`      | `Gen-2.5-Medium`, `Gen-2.5-High`, `Gen-2.5-Extreme-Low`        | `Gen-2.5-Medium`             |
+| `--mesh-mode` | `Raw`, `Quad`                                                  | `Raw`                        |
+| `--format`    | `glb`, `usdz`, `fbx`, `obj`, `stl`                             | `glb`                        |
+| `--quality`   | Target polygon count: Raw `500–1,000,000`; Quad `1,000–50,000` | Raw `500,000`; Quad `18,000` |
+
+Defaults are applied by the server. The response includes a generation ID; use
+it to check progress and retrieve the result:
 
 ```sh
 hyper3d status <generation-id>
@@ -80,6 +89,12 @@ To separate a completed model into parts:
 ```sh
 hyper3d bang <generation-id> --instruction "separate the handle and lid"
 ```
+
+| Option          | Meaning / accepted values                                                         | Default when omitted     |
+| --------------- | --------------------------------------------------------------------------------- | ------------------------ |
+| `--instruction` | Description of the parts to separate                                              | Automatic split planning |
+| `--strength`    | Integer `1–12`; soft target for the number of parts, so the actual count may vary | `5`                      |
+| `--format`      | `glb`, `usdz`, `fbx`, `obj`, `stl`                                                | `glb`                    |
 
 Run `hyper3d <command> --help` for more options. If a generation request times out,
 check your existing tasks before submitting it again; the CLI never retries
