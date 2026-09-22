@@ -1,0 +1,65 @@
+name: Release
+on:
+  push:
+    branches: [main, prerelease]
+permissions:
+  contents: read
+# Serialize publications across both channels. Never cancel an in-flight publish.
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - run: node scripts/check-release-policy.mjs
+      - name: Select and validate release version
+        id: release
+        run: node scripts/release-version.mjs
+      - name: Prevent duplicate or outdated publications
+        env:
+          RELEASE_CHANNEL: ${{ steps.release.outputs.channel }}
+        run: node scripts/verify-registry-version.mjs
+      - name: Require an unused stable tag
+        if: steps.release.outputs.channel == 'latest'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            echo "Tag v$VERSION already exists; recover the existing release instead."
+            exit 1
+          fi
+      - run: npm run test:install
+      - name: Pack release artifact
+        run: |
+          mkdir release
+          npm pack --workspace @hyper3d/cli --pack-destination release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: release/*.tgz
+          retention-days: 14
+      - name: Publish with npm trusted publishing
+        env:
+          CHANNEL: ${{ steps.release.outputs.channel }}
+        run: npm publish release/*.tgz --access public --provenance --tag "$CHANNEL"
+      - name: Create stable GitHub release
+        if: steps.release.outputs.channel == 'latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: gh release create "v$VERSION" release/*.tgz --target "$GITHUB_SHA" --generate-notes

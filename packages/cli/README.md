@@ -165,6 +165,6 @@ URLs remain server-provided.
 value uses the current working directory rather than the default. Use a nonempty
 absolute path for a consistent location across commands.
 
-For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
-[release guide](docs/releasing.md). Report problems in
+For development and releases, see [CONTRIBUTING.md](https://github.com/DeemosTech/hyper3d-cli/blob/main/CONTRIBUTING.md) and the
+[release guide](https://github.com/DeemosTech/hyper3d-cli/blob/main/docs/releasing.md). Report problems in
 [GitHub Issues](https://github.com/DeemosTech/hyper3d-cli/issues).

@@ -1,0 +1,14 @@
+{
+  "client_id": "https://hyper3d.ai/oauth_cimd/cli.json",
+  "client_name": "Hyper3D CLI",
+  "client_uri": "https://github.com/DeemosTech/hyper3d-cli",
+  "application_type": "native",
+  "redirect_uris": [],
+  "grant_types": [
+    "urn:ietf:params:oauth:grant-type:device_code",
+    "refresh_token"
+  ],
+  "response_types": [],
+  "token_endpoint_auth_method": "none",
+  "scope": "rodin:generate rodin:read account:read offline_access"
+}
