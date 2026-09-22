@@ -52,8 +52,10 @@ try {
       temporary,
     ),
   );
-  assert.equal(publication.id, packed[0].id);
-  assert.equal(publication.integrity, packed[0].integrity);
+  // Newer npm versions group publish JSON by package name; older versions do not.
+  const publishedPackage = publication[packed[0].name] ?? publication;
+  assert.equal(publishedPackage.id, packed[0].id);
+  assert.equal(publishedPackage.integrity, packed[0].integrity);
   const prefix = join(temporary, 'global');
   npm([
     'install',
