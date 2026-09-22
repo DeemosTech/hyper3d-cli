@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -17,6 +17,13 @@ const executable = fileURLToPath(
 const exec = promisify(execFile);
 test('CLI against real HTTP MCP: named operations, public commands, error exits and no retry', async () => {
   let calls = 0;
+  const requests = [];
+  const { version } = JSON.parse(
+    await readFile(
+      new URL('../packages/cli/package.json', import.meta.url),
+      'utf8',
+    ),
+  );
   const config = await mkdtemp(join(tmpdir(), 'hyper3d-cli-'));
   const server = createServer(async (req, res) => {
     const mcp = new McpServer({ name: 'fixture', version: '1.0.0' });
@@ -61,6 +68,10 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       await mcp.connect(transport);
       let body = '';
       for await (const chunk of req) body += chunk;
+      requests.push({
+        method: body ? JSON.parse(body).method : req.method,
+        version: req.headers['x-hyper3d-cli-version'],
+      });
       await transport.handleRequest(
         req,
         res,
@@ -85,7 +96,6 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
             env: {
               ...process.env,
               HYPER3D_CONFIG_DIR: config,
-              HYPER3D_RELEASE_POLICY_URL: '',
               CI: '1',
             },
             timeout: 15000,
@@ -153,6 +163,18 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.equal(failed.code, 1, failed.stderr);
     assert.match(failed.stderr, /test failure/);
     assert.equal(calls, 1);
+    for (const method of [
+      'initialize',
+      'notifications/initialized',
+      'tools/list',
+      'tools/call',
+    ])
+      assert.ok(
+        requests.some((request) => request.method === method),
+        method,
+      );
+    for (const request of requests)
+      assert.equal(request.version, version, request.method);
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

@@ -62,14 +62,7 @@ Check Actions, the npm artifact and GitHub release. npm versions are immutable.
 If publishing succeeds but GitHub release creation fails, create the GitHub release
 from the existing tag and workflow artifact; do not republish that npm version.
 
-## Compatibility policy and authentication
-
-`release-policy/stable.json` is an independent minimum-version policy. Host it over
-HTTPS and set `HYPER3D_RELEASE_POLICY_URL` or the package's
-`hyper3d.releasePolicyUrl` to enable it. No production policy URL is configured.
-Keep forced upgrades separate from normal releases. Network or invalid-policy
-errors warn and allow continuing; valid minimum-version failures block model
-operations but leave authentication and updates available.
+## Authentication verification
 
 Before releasing, verify the deployed Device Flow and official CIMD client metadata.
 See [architecture.md](architecture.md) for the backend integration contract.

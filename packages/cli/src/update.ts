@@ -8,8 +8,8 @@ import {
   access,
   rm,
 } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join, dirname, delimiter } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import semver from 'semver';
@@ -91,6 +91,16 @@ export async function isGlobalInstall(
     return false;
   }
 }
+async function installVersion(name: string, version: string, run: Runner) {
+  await run([
+    'install',
+    '--global',
+    `${name}@${version}`,
+    '--no-fund',
+    '--no-audit',
+  ]);
+}
+
 export async function update(
   pkg: PackageInfo,
   directory: string,
@@ -107,39 +117,31 @@ export async function update(
       `Not a global npm installation. Use your package manager to update ${pkg.name}@${channel}; for one-off use run npx ${pkg.name}@${channel}.`,
     );
   const result = await checkUpdate(pkg, channel, run);
-  if (result.available)
-    await run([
-      'install',
-      '--global',
-      `${pkg.name}@${result.target}`,
-      '--no-fund',
-      '--no-audit',
-    ]);
+  if (result.available) await installVersion(pkg.name, result.target, run);
   return { ...result, updated: result.available };
 }
 
 interface StartupOptions {
+  directory?: string;
   run?: Runner;
-  env?: NodeJS.ProcessEnv;
-  interactive?: boolean;
+  cacheDir: string;
+  autoUpdate?: boolean;
   now?: () => number;
   write?: (message: string) => unknown;
 }
 export async function startupUpdate(
   pkg: PackageInfo,
-  directory: string,
   {
+    directory = fileURLToPath(new URL('..', import.meta.url)),
     run = npm,
-    env = process.env,
-    interactive = Boolean(process.stderr.isTTY),
+    cacheDir,
+    autoUpdate = false,
     now = Date.now,
     write = (message) => process.stderr.write(message),
-  }: StartupOptions = {},
+  }: StartupOptions,
 ) {
-  if (pkg.private || env.CI || !interactive || env.HYPER3D_UPDATE_CHECK === '0')
-    return false;
+  if (pkg.private) return false;
   const channel = updateChannel(pkg);
-  const cacheDir = env.HYPER3D_CONFIG_DIR ?? join(homedir(), '.hyper3d');
   const cachePath = join(cacheDir, 'update-check.json');
   const lockPath = join(cacheDir, 'update.lock');
   let locked = false;
@@ -188,14 +190,8 @@ export async function startupUpdate(
     );
     const result = await checkUpdate(pkg, channel, run);
     if (!result.available) return false;
-    if (env.HYPER3D_AUTO_UPDATE !== '0') {
-      await run([
-        'install',
-        '--global',
-        `${pkg.name}@${result.target}`,
-        '--no-fund',
-        '--no-audit',
-      ]);
+    if (autoUpdate) {
+      await installVersion(pkg.name, result.target, run);
       write(
         `Updated to ${result.target}. Run your command again; it has not been executed.\n`,
       );

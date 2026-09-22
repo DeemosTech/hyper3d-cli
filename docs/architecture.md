@@ -79,7 +79,7 @@ hyper3d bang <generation-id> --instruction "separate the handle and lid"
 `generate` accepts one to five local images and/or a prompt. It validates options,
 requests presigned uploads, PUTs each image in order, and starts generation only
 after every upload succeeds. It submits generation once and never retries or
-switches contracts after an error or timeout. After an ambiguous generation
+resubmits after an error or timeout. After an ambiguous generation
 failure, inspect existing tasks before generating again. Failed uploads may leave
 unused upload allocations; they do not start generation. Image type is inferred
 from the filename extension. Upload destinations must use HTTPS; uploads never
@@ -97,45 +97,43 @@ hyper3d status <generation-id> --output json
 integer timeout in seconds. It automatically chains wait-tool calls of at most
 30 seconds until generation finishes or the total timeout expires.
 
-## Operation contracts
+Every MCP HTTP request includes `X-Hyper3D-CLI-Version`, read from the CLI's
+package version, matching the version sent in MCP initialization `clientInfo`.
+This lets the stateless backend read the CLI version on individual tool calls;
+the OAuth `client_id` remains unchanged.
 
-The CLI selects its current bundled contract internally (currently `v1`).
-There is no public schema-version option.
-`src/contracts/<version>/` contains each contract's schema and implementation;
-authentication and transport are shared. There is currently one real contract.
-When a breaking wire/behavior change requires another implementation, retain the
-previous generation alongside the current one; support at most two generations.
-An enum addition alone does not create a new generation. These are local CLI
-contract versions, not a claim that the server supports version negotiation.
+## CLI layers
+
+`src/index.ts` binds command-line arguments directly to the exported business
+functions in `src/operations.ts`: `generate`, `status`, `poll`, `result`, and
+`bang`. Business functions compose the named MCP tool functions exported by
+`src/mcp.ts`, which handle schema validation and result decoding.
+There is no operations factory or dynamic tool-name dispatch in the CLI.
+
+Each business call opens one MCP connection and discovers the remote tools once;
+all steps in that workflow reuse the connection, which closes even on failure.
+Business functions accept an optional `ToolContext` for testing or reuse with a
+caller-owned connection. Tool functions take that context explicitly and do not
+open or close connections themselves. Static functions still validate against
+the live server schema.
+
+## Tool schema
+
+`src/base_schema.json` is the single bundled reference snapshot of the public
+production tool list. It contains 7 tools and their input/output schemas, without
+schema versions or implementation adapters. Backend compatibility is handled by
+the backend; the CLI has one implementation of each operation.
 
 Actual requests are validated against the live server schema. Differences from
-the bundled input schema warn but do not reject input accepted by the server.
-New enum values are passed through; no value is silently replaced. Output data is
-preserved, including unknown enums, while the MCP SDK validates the server's own
-output schema. Workflows validate the output fields they need before continuing.
-
-The `v1` contract snapshot was captured from the public production tool list. It
-contains 7 tools and their input/output schemas. It is a review baseline, not a
-claim that billable operations were exercised.
-
-Named operations validate actual input against the **remote** schema. A breaking
-change in the abstract does not block an operation whose actual input satisfies
-the current remote schema. The SDK validates declared structured outputs.
-
-The bundled snapshot describes the CLI's known contract; it does not establish
-whether a CLI release is outdated. Additive server changes may remain compatible,
-and schema differences cannot detect changed semantics. Normal commands validate
-their actual input rather than running a full schema diff. A newer npm version
-indicates an available update; an explicit minimum-version policy is needed to
-require an upgrade. No production minimum-version policy URL is configured yet.
-
-The compatibility analyzer deliberately handles a limited subset: required
-fields and enum narrowing are recognized; other constraint/type/output changes
-are conservatively reported as unknown. It ignores documentation and irrelevant
-ordering. It is not a general JSON Schema containment solver. Schemas cannot
-detect changes in business semantics. Tool absence can also be due to scopes.
+the base input schema warn but do not reject input accepted by the server.
+New enum values pass through unchanged. The MCP SDK validates the server's
+output schema, and workflows validate the output fields they need to continue.
+The base snapshot does not establish whether a CLI release is outdated; npm
+version checks determine whether an update is available.
 
 Other command failures and tool `isError` results exit 1; success exits 0.
+MCP tool call failures retain the original error and suggest
+`hyper3d update --check`. Calls are never automatically retried.
 
 `--base-url` or `BASE_URL` overrides the default `https://api.hyper3d.com/api`.
 A trailing slash is optional. MCP and account endpoints are resolved relative to

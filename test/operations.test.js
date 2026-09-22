@@ -3,16 +3,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  getContract,
-  prepareCall,
-} from '../packages/cli/dist/contracts/index.js';
-import {
-  createOperations,
-  resultData,
-} from '../packages/cli/dist/operations.js';
+import { baseSchema, prepareCall } from '../packages/cli/dist/schema.js';
+import { generate, poll } from '../packages/cli/dist/operations.js';
 
-const contract = getContract();
+import { resultData } from '../packages/cli/dist/mcp.js';
+
 const id = 'd1bb98f2-48be-4be1-9818-d49de002497a';
 
 test('CLI results omit top-level display_url and preserve other URLs', () => {
@@ -31,28 +26,27 @@ test('CLI results omit top-level display_url and preserve other URLs', () => {
 
 test('actual remote enum governs acceptance, local differences only warn', () => {
   const remote = structuredClone(
-    contract.schema.tools.find((t) => t.name === 'rodin_generate'),
+    baseSchema.tools.find((t) => t.name === 'rodin_generate'),
   );
   remote.inputSchema.properties.tier.enum.push('Future');
   const warnings = [];
   assert.equal(
-    prepareCall(
-      contract,
-      remote.name,
-      { prompt: 'cat', tier: 'Future' },
-      remote,
-      (m) => warnings.push(m),
+    prepareCall(remote.name, { prompt: 'cat', tier: 'Future' }, remote, (m) =>
+      warnings.push(m),
     ).arguments.tier,
     'Future',
   );
   assert.equal(warnings.length, 1);
   remote.inputSchema.properties.tier.enum = ['Future'];
   assert.throws(
-    () =>
-      prepareCall(contract, remote.name, { tier: 'Gen-2.5-Medium' }, remote),
+    () => prepareCall(remote.name, { tier: 'Gen-2.5-Medium' }, remote),
     /Invalid tool input/,
   );
-  assert.throws(() => getContract('v99'), /Unsupported schema version/);
+  assert.throws(() => prepareCall('unknown', {}, remote), /Unsupported tool/);
+  assert.throws(
+    () => prepareCall(remote.name, {}, undefined),
+    /Tool unavailable/,
+  );
 });
 
 test('generate uploads ordered images, then generates once; failures never generate', async (t) => {
@@ -85,8 +79,11 @@ test('generate uploads ordered images, then generates once; failures never gener
       };
     },
   };
-  const ops = createOperations(client, contract, contract.schema.tools);
-  assert.equal((await ops.generate({ image: paths })).status, 'future-status');
+  const context = { client, remoteTools: baseSchema.tools };
+  assert.equal(
+    (await generate({ image: paths }, context)).status,
+    'future-status',
+  );
   assert.deepEqual(
     events.map((e) => e.name ?? e.url),
     [
@@ -106,7 +103,7 @@ test('generate uploads ordered images, then generates once; failures never gener
   events.length = 0;
   failUpload = true;
   await assert.rejects(
-    ops.generate({ image: paths }),
+    generate({ image: paths }, context),
     /generation was not started/,
   );
   assert.equal(
@@ -115,21 +112,21 @@ test('generate uploads ordered images, then generates once; failures never gener
   );
   events.length = 0;
   await assert.rejects(
-    ops.generate({ image: paths, tier: 'invalid' }),
+    generate({ image: paths, tier: 'invalid' }, context),
     /Invalid tool input/,
   );
   assert.equal(events.length, 0);
-  await assert.rejects(ops.generate({}), /Provide --prompt or --image/);
+  await assert.rejects(generate({}, context), /Provide --prompt or --image/);
   await assert.rejects(
-    ops.generate({ image: [...paths, ...paths, ...paths] }),
+    generate({ image: [...paths, ...paths, ...paths] }, context),
     /at most five/,
   );
 });
 
 test('text generation preserves server errors and never retries', async () => {
   let calls = 0;
-  const ops = createOperations(
-    {
+  const context = {
+    client: {
       async callTool() {
         calls++;
         return {
@@ -138,10 +135,9 @@ test('text generation preserves server errors and never retries', async () => {
         };
       },
     },
-    contract,
-    contract.schema.tools,
-  );
-  await assert.rejects(ops.generate({ prompt: 'cat' }), /no credits/);
+    remoteTools: baseSchema.tools,
+  };
+  await assert.rejects(generate({ prompt: 'cat' }, context), /no credits/);
   assert.equal(calls, 1);
 });
 
@@ -173,8 +169,8 @@ test('poll continues bounded wait calls until terminal state or total timeout', 
       return { structuredContent: responses.shift() };
     },
   };
-  const ops = createOperations(client, contract, contract.schema.tools);
-  const result = await ops.poll(id, 100);
+  const context = { client, remoteTools: baseSchema.tools };
+  const result = await poll(id, 100, context);
   assert.equal(result.status, 'completed');
   assert.deepEqual(
     requests.map((request) => request.arguments.timeout_seconds),
@@ -196,7 +192,7 @@ test('poll continues bounded wait calls until terminal state or total timeout', 
       timed_out: true,
     },
   );
-  const timedOut = await ops.poll(id, 46);
+  const timedOut = await poll(id, 46, context);
   assert.equal(timedOut.timed_out, true);
   assert.deepEqual(
     requests.map((request) => request.arguments.timeout_seconds),
@@ -210,11 +206,43 @@ test('poll continues bounded wait calls until terminal state or total timeout', 
     stage: { name: 'Pack', current: 2, total: 2 },
     timed_out: false,
   });
-  await ops.poll(id);
+  await poll(id, undefined, context);
   assert.deepEqual(
     requests.map((request) => request.arguments.timeout_seconds),
     [30],
   );
-  await assert.rejects(ops.poll(id, 0), /positive integer/);
-  await assert.rejects(ops.poll(id, 1.5), /positive integer/);
+  await assert.rejects(poll(id, 0, context), /positive integer/);
+  await assert.rejects(poll(id, 1.5, context), /positive integer/);
+});
+
+test('MCP failures preserve the error and suggest checking updates without retrying', async () => {
+  for (const failure of ['transport', 'tool', 'result']) {
+    let calls = 0;
+    const cause = new Error('connection lost');
+    const context = {
+      remoteTools: baseSchema.tools,
+      client: {
+        async callTool() {
+          calls++;
+          if (failure === 'transport') throw cause;
+          if (failure === 'tool')
+            return {
+              isError: true,
+              content: [{ type: 'text', text: 'no credits' }],
+            };
+          return { content: [] };
+        },
+      },
+    };
+    await assert.rejects(generate({ prompt: 'cat' }, context), (error) => {
+      assert.match(error.message, /Check for updates: hyper3d update --check/);
+      assert.match(error.message, /The operation was not retried/);
+      if (failure === 'transport') assert.equal(error.cause, cause);
+      if (failure === 'tool') assert.match(error.message, /no credits/);
+      if (failure === 'result')
+        assert.match(error.message, /no structured operation result/);
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
 });

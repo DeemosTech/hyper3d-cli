@@ -1,6 +1,22 @@
-import { secureUrl } from './auth.js';
-
 export const DEFAULT_BASE_URL = 'https://api.hyper3d.com/api';
+
+export function secureUrl(value: string | URL | Request) {
+  const url = new URL(value instanceof Request ? value.url : value);
+  if (
+    url.username ||
+    url.password ||
+    url.hash ||
+    (url.protocol !== 'https:' &&
+      !(
+        url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+      ))
+  )
+    throw new Error(
+      'URLs must use HTTPS (HTTP is allowed for localhost tests).',
+    );
+  return url;
+}
 
 export function resolveEndpoints(value = DEFAULT_BASE_URL) {
   const base = secureUrl(value);
@@ -12,4 +28,10 @@ export function resolveEndpoints(value = DEFAULT_BASE_URL) {
     userInfo: new URL('user/get_info', base).href,
     groupInfo: new URL('group/group_info', base).href,
   };
+}
+
+export let endpoints = resolveEndpoints();
+
+export function configureEndpoints(baseUrl: string) {
+  endpoints = resolveEndpoints(baseUrl);
 }

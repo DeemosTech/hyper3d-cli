@@ -14,7 +14,6 @@ import {
   logout,
 } from '../packages/cli/dist/auth.js';
 import { checkUpdate, update } from '../packages/cli/dist/update.js';
-import { evaluatePolicy, enforcePolicy } from '../packages/cli/dist/policy.js';
 
 test('CIMD is a public native client with an exact client ID', () => {
   const metadata = clientMetadata();
@@ -112,24 +111,4 @@ test('updates only the global installation using an exact version', async () => 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
-});
-test('minimum policy blocks old versions; network failure never implies forced update', async () => {
-  assert.equal(
-    evaluatePolicy({ schemaVersion: 1, minimumVersion: '0.2.0' }, '0.1.0')
-      .required,
-    true,
-  );
-  assert.throws(() =>
-    evaluatePolicy({ schemaVersion: 1, minimumVersion: 'bad' }, '0.1.0'),
-  );
-  await assert.rejects(
-    enforcePolicy('https://example.com/policy.json', '0.1.0', async () => ({
-      ok: true,
-      json: async () => ({ schemaVersion: 1, minimumVersion: '0.2.0' }),
-    })),
-    /CLIENT_UPGRADE_REQUIRED/,
-  );
-  await enforcePolicy('https://example.com/policy.json', '0.1.0', async () => {
-    throw new Error('offline');
-  });
 });

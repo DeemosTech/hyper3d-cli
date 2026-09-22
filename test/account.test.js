@@ -9,6 +9,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { accountInfo } from '../packages/cli/dist/account.js';
 import {
+  configureEndpoints,
+  endpoints,
+} from '../packages/cli/dist/endpoints.js';
+import {
   createProvider,
   loadCredentials,
   logout,
@@ -34,10 +38,13 @@ const json = (body, status = 200) =>
 async function isolated(run) {
   const directory = await mkdtemp(join(tmpdir(), 'hyper3d-account-'));
   const previous = process.env.HYPER3D_CONFIG_DIR;
+  const previousBaseUrl = endpoints.baseUrl;
+  configureEndpoints(baseUrl);
   process.env.HYPER3D_CONFIG_DIR = directory;
   try {
     await run(directory);
   } finally {
+    configureEndpoints(previousBaseUrl);
     if (previous === undefined) delete process.env.HYPER3D_CONFIG_DIR;
     else process.env.HYPER3D_CONFIG_DIR = previous;
     await rm(directory, { recursive: true, force: true });
@@ -47,7 +54,7 @@ async function isolated(run) {
 test('account status without credentials makes no network requests', () =>
   isolated(async () => {
     assert.deepEqual(
-      await accountInfo(baseUrl, {
+      await accountInfo({
         fetchFn: () => assert.fail('unexpected request'),
       }),
       { authenticated: false },
@@ -61,7 +68,7 @@ test('personal account status uses the account HTTP API and its authorized walle
       token_type: 'Bearer',
     });
     const calls = [];
-    const result = await accountInfo(`${baseUrl}/`, {
+    const result = await accountInfo({
       fetchFn: async (input, init) => {
         calls.push(new URL(input).href);
         assert.equal(init.method, 'POST');
@@ -92,12 +99,12 @@ test('team account status requests only the team bound to the grant', () =>
       token_type: 'Bearer',
     });
     const calls = [];
-    const result = await accountInfo(baseUrl, {
+    const result = await accountInfo({
       fetchFn: async (input, init) => {
         calls.push([new URL(input).pathname, JSON.parse(init.body)]);
         return calls.length === 1
           ? json({
-              meta: user,
+              meta: { user_uuid: user.user_uuid, username: user.username },
               billing_workspace: { type: 'group', group_uuid: 'team-1' },
             })
           : json({
@@ -132,7 +139,7 @@ test('account status reports HTTP, server and network errors without treating th
     ]) {
       let calls = 0;
       await assert.rejects(
-        accountInfo(baseUrl, {
+        accountInfo({
           fetchFn: async () => {
             calls++;
             return json({}, status);
@@ -143,13 +150,13 @@ test('account status reports HTTP, server and network errors without treating th
       assert.equal(calls, 1);
     }
     await assert.rejects(
-      accountInfo(baseUrl, {
+      accountInfo({
         fetchFn: async () => json({ error: 'fixture error' }),
       }),
       /fixture error/,
     );
     await assert.rejects(
-      accountInfo(baseUrl, {
+      accountInfo({
         fetchFn: async () => {
           throw new TypeError('offline');
         },
@@ -165,27 +172,27 @@ test('account status rejects missing workspace, invalid identity and invalid wal
       token_type: 'Bearer',
     });
     for (const [body, message] of [
-      [{ meta: user }, /authorized billing workspace/],
+      [{ meta: user }, /billing_workspace/],
       [
         {
           meta: { ...user, user_uuid: '' },
           billing_workspace: { type: 'personal' },
         },
-        /Invalid user information/,
+        /user_uuid/,
       ],
       [
         {
           meta: { ...user, balance: '125' },
           billing_workspace: { type: 'personal' },
         },
-        /valid balance/,
+        /balance|frozen/,
       ],
       [
         {
           meta: { ...user, subscriptions: null },
           billing_workspace: { type: 'personal' },
         },
-        /valid subscription balances/,
+        /subscriptions/,
       ],
       [
         {
@@ -195,23 +202,23 @@ test('account status rejects missing workspace, invalid identity and invalid wal
           },
           billing_workspace: { type: 'personal' },
         },
-        /valid subscription balances/,
+        /subscriptions/,
       ],
       [
         {
           meta: { ...user, frozen: null },
           billing_workspace: { type: 'personal' },
         },
-        /valid balance/,
+        /balance|frozen/,
       ],
     ])
       await assert.rejects(
-        accountInfo(baseUrl, { fetchFn: async () => json(body) }),
+        accountInfo({ fetchFn: async () => json(body) }),
         message,
       );
     let calls = 0;
     await assert.rejects(
-      accountInfo(baseUrl, {
+      accountInfo({
         fetchFn: async () =>
           ++calls === 1
             ? json({
@@ -237,7 +244,7 @@ test('account status refreshes stored credentials once and retries with the new 
     });
     let accountCalls = 0,
       refreshCalls = 0;
-    const result = await accountInfo(baseUrl, {
+    const result = await accountInfo({
       fetchFn: async (input, init) => {
         const url = new URL(input);
         if (url.pathname.includes('oauth-protected-resource'))
@@ -357,4 +364,21 @@ test('auth status and info alias support human and JSON output; authorization er
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));
     }
+  }));
+
+test('personal account without active subscriptions has zero subscription balance', () =>
+  isolated(async () => {
+    await createProvider(endpoint, {}).saveTokens({
+      access_token: 'fixture-token',
+      token_type: 'Bearer',
+    });
+    const result = await accountInfo({
+      fetchFn: async () =>
+        json({
+          meta: { ...user, subscriptions: { active_subscriptions: [] } },
+          billing_workspace: { type: 'personal' },
+        }),
+    });
+    assert.equal(result.wallet.subscription_balance, 0);
+    assert.equal(result.wallet.balance, 12.5);
   }));

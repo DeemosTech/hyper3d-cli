@@ -1,18 +1,56 @@
 import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+import { z } from 'zod';
 
-import { loadCredentials, createProvider, secureUrl } from './auth.js';
-import { resolveEndpoints } from './endpoints.js';
+import { loadCredentials, createProvider } from './auth.js';
+import { endpoints, secureUrl } from './endpoints.js';
 
 const WALLET_UNITS_PER_CREDIT = 10;
 
-export async function accountInfo(baseUrl: string, { fetchFn = fetch } = {}) {
-  const endpoints = resolveEndpoints(baseUrl);
+const identitySchema = z.object({
+  user_uuid: z.string().min(1),
+  username: z.string(),
+});
+const personalMetaSchema = identitySchema.extend({
+  balance: z.number(),
+  frozen: z.number(),
+  subscriptions: z.object({
+    active_subscriptions: z.array(z.object({ wallet_balance: z.number() })),
+  }),
+});
+const accountResponseSchema = z.object({
+  meta: identitySchema.passthrough(),
+  billing_workspace: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('personal') }),
+    z.object({ type: z.literal('group'), group_uuid: z.string().min(1) }),
+  ]),
+});
+const groupResponseSchema = z.object({
+  group_meta: z.object({
+    uuid: z.string().min(1),
+    name: z.string().optional(),
+    frozen: z.number(),
+  }),
+  balance: z.number(),
+});
+
+function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const details = result.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ');
+    throw new Error(`Invalid account response: ${details}`);
+  }
+  return result.data;
+}
+
+export async function accountInfo({ fetchFn = fetch } = {}) {
   const endpoint = endpoints.mcp;
   const data = await loadCredentials(endpoint);
   const provider = data.clientId ? createProvider(endpoint, data) : undefined;
   let accessToken = data.tokens?.access_token;
   if (!accessToken) return { authenticated: false };
-  let refreshed = false;
+
   const request: typeof fetch = async (input, init = {}) => {
     secureUrl(input);
     return fetchFn(input, {
@@ -21,7 +59,12 @@ export async function accountInfo(baseUrl: string, { fetchFn = fetch } = {}) {
       signal: AbortSignal.timeout(15000),
     });
   };
-  const post = async (path: string, body: Record<string, unknown>) => {
+
+  let refreshed = false;
+  const post_with_optional_token_refresh = async (
+    path: string,
+    body: Record<string, unknown>,
+  ) => {
     const send = async () =>
       request(path, {
         method: 'POST',
@@ -57,16 +100,11 @@ export async function accountInfo(baseUrl: string, { fetchFn = fetch } = {}) {
     if (result.error) throw new Error(`Account lookup failed: ${result.error}`);
     return result;
   };
-  const { meta, billing_workspace: workspace } = await post(
-    endpoints.userInfo,
-    {},
+
+  const { meta, billing_workspace: workspace } = parseResponse(
+    accountResponseSchema,
+    await post_with_optional_token_refresh(endpoints.userInfo, {}),
   );
-  if (
-    typeof meta?.user_uuid !== 'string' ||
-    !meta.user_uuid ||
-    typeof meta.username !== 'string'
-  )
-    throw new Error('Invalid user information returned by server.');
   let wallet:
     | {
         type: 'personal';
@@ -81,56 +119,43 @@ export async function accountInfo(baseUrl: string, { fetchFn = fetch } = {}) {
         group_uuid: string;
         name?: string;
       };
-  if (workspace?.type === 'personal') {
-    const activeSubscriptions = meta.subscriptions?.active_subscriptions;
-    if (!Array.isArray(activeSubscriptions))
-      throw new Error(
-        'Server did not return valid subscription balances for the authorized wallet.',
+  switch (workspace.type) {
+    case 'personal': {
+      const personal = parseResponse(personalMetaSchema, meta);
+      const subscriptionBalance =
+        personal.subscriptions.active_subscriptions.reduce(
+          (total, subscription) => total + subscription.wallet_balance,
+          0,
+        );
+      wallet = {
+        type: 'personal',
+        balance: personal.balance,
+        subscription_balance: subscriptionBalance,
+        frozen: personal.frozen,
+      };
+      break;
+    }
+    case 'group': {
+      const result = parseResponse(
+        groupResponseSchema,
+        await post_with_optional_token_refresh(endpoints.groupInfo, {
+          group_uuid: workspace.group_uuid,
+        }),
       );
-    const subscriptionBalance = activeSubscriptions.reduce(
-      (total, subscription) => {
-        if (!Number.isFinite(subscription?.wallet_balance))
-          throw new Error(
-            'Server did not return valid subscription balances for the authorized wallet.',
-          );
-        return total + subscription.wallet_balance;
-      },
-      0,
-    );
-    wallet = {
-      type: 'personal',
-      balance: meta.balance,
-      subscription_balance: subscriptionBalance,
-      frozen: meta.frozen,
-    };
-  } else if (
-    workspace?.type === 'group' &&
-    typeof workspace.group_uuid === 'string' &&
-    workspace.group_uuid
-  ) {
-    const result = await post(endpoints.groupInfo, {
-      group_uuid: workspace.group_uuid,
-    });
-    if (result.group_meta?.uuid !== workspace.group_uuid)
-      throw new Error(
-        'The returned wallet does not match the authorized billing workspace.',
-      );
-    wallet = {
-      type: 'group',
-      group_uuid: workspace.group_uuid,
-      name: result.group_meta.name,
-      balance: result.balance,
-      frozen: result.group_meta.frozen,
-    };
-  } else {
-    throw new Error(
-      'Server did not return the authorized billing workspace. Deploy account:read support and run hyper3d auth login.',
-    );
+      if (result.group_meta?.uuid !== workspace.group_uuid)
+        throw new Error(
+          'The returned wallet does not match the authorized billing workspace.',
+        );
+      wallet = {
+        type: 'group',
+        group_uuid: workspace.group_uuid,
+        name: result.group_meta.name,
+        balance: result.balance,
+        frozen: result.group_meta.frozen,
+      };
+      break;
+    }
   }
-  if (!Number.isFinite(wallet.balance) || !Number.isFinite(wallet.frozen))
-    throw new Error(
-      'Server did not return a valid balance for the authorized wallet.',
-    );
   const displayedWallet = {
     ...wallet,
     balance: wallet.balance / WALLET_UNITS_PER_CREDIT,

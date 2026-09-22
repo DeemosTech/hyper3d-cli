@@ -44,7 +44,8 @@ hyper3d auth status   # Account and credit balances
 hyper3d auth logout   # Remove saved credentials from this machine
 ```
 
-Credentials are saved in `~/.hyper3d` and refreshed automatically when needed.
+Credentials are saved in `~/.hyper3d` by default and refreshed automatically when
+needed. Set `HYPER3D_CONFIG_DIR` to use a different directory.
 Signing out locally does not revoke your server-side authorization.
 
 ## Generate a model
@@ -105,13 +106,17 @@ hyper3d update
 ```
 
 An interactive **npm global installation** checks for updates once a day before
-model commands and installs newer versions automatically. Stable installations
-follow `latest`; main-branch builds follow `next`. After an automatic update, the
-CLI asks you to rerun your command. The model operation has not been submitted.
+model commands and only displays an update notice by default. Stable installations
+follow `latest`; main-branch builds follow `next`. Run `hyper3d update` to install
+an available update.
 
-Set `HYPER3D_AUTO_UPDATE=0` to receive update notices without installing, or
-`HYPER3D_UPDATE_CHECK=0` to disable automatic checks. CI and noninteractive scripts
-do not auto-update. Network failures leave your command usable.
+Set `HYPER3D_AUTO_UPDATE=1` to opt into automatic installation (which asks you to
+rerun your command before submitting the model operation), or
+`HYPER3D_UPDATE_CHECK=0` to disable automatic checks and automatic installation.
+These switches require the exact values `1` and `0`, respectively. Automatic checks
+and installation are also skipped when `CI` is nonempty (including `CI=0`) or stderr
+is not a TTY. These settings do not disable manual `hyper3d update` or
+`hyper3d update --check`. Network failures leave your command usable.
 
 For pnpm, Yarn, or project-local installations, update with the package manager
 that installed the CLI. For one-off runs, specify `@latest`:
@@ -137,8 +142,9 @@ newer version and never downgrades a pinned installation.
 - **Update permission error:** update with the package manager and permissions used
   for the original installation.
 - **An interrupted update leaves future checks inactive:** close other CLI
-  processes and remove the empty `~/.hyper3d/update.lock` directory, then run
-  `hyper3d update`.
+  processes and remove the empty `update.lock` directory inside your configuration
+  directory (`~/.hyper3d` by default, or the directory set by `HYPER3D_CONFIG_DIR`),
+  then run `hyper3d update`.
 
 The API base URL defaults to `https://api.hyper3d.com/api`. Set `BASE_URL` to
 use another environment; a trailing slash is optional:
@@ -151,7 +157,13 @@ hyper3d --base-url https://api.hyper3d.com/api auth status
 `--base-url` overrides `BASE_URL`. MCP (`mcp`), account (`user/get_info`) and
 team (`group/group_info`) endpoints are derived from this base. HTTPS is required
 except for localhost. OAuth endpoints remain server-discovered, and upload/result
-URLs remain server-provided. `HYPER3D_CONFIG_DIR` changes the credential and update-cache directory.
+URLs remain server-provided.
+
+`HYPER3D_CONFIG_DIR` changes the directory for credentials, the update cache
+(`update-check.json`), and the update lock (`update.lock`). If unset, it defaults to
+`~/.hyper3d`. Relative paths resolve from the current working directory; an empty
+value uses the current working directory rather than the default. Use a nonempty
+absolute path for a consistent location across commands.
 
 For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [release guide](docs/releasing.md). Report problems in

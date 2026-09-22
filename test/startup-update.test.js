@@ -13,8 +13,7 @@ async function fixture(run) {
   const calls = [],
     output = [];
   const options = {
-    interactive: true,
-    env: { HYPER3D_CONFIG_DIR: join(root, 'config') },
+    cacheDir: join(root, 'config'),
     run: async (args) => {
       calls.push(args);
       return args[0] === 'root' ? root : args[0] === 'view' ? '"0.2.0"' : '';
@@ -29,7 +28,8 @@ async function fixture(run) {
 }
 test('interactive npm global install auto-updates exact version, requests rerun, and checks once a day', () =>
   fixture(async ({ directory, calls, output, options }) => {
-    assert.equal(await startupUpdate(pkg, directory, options), true);
+    options.autoUpdate = true;
+    assert.equal(await startupUpdate(pkg, { ...options, directory }), true);
     assert.deepEqual(calls.at(-1), [
       'install',
       '--global',
@@ -38,45 +38,39 @@ test('interactive npm global install auto-updates exact version, requests rerun,
       '--no-audit',
     ]);
     assert.match(output.join(''), /has not been executed/);
-    assert.equal(await startupUpdate(pkg, directory, options), false);
+    assert.equal(await startupUpdate(pkg, { ...options, directory }), false);
     assert.equal(calls.filter((args) => args[0] === 'view').length, 1);
   }));
-test('CI, noninteractive, disabled and private builds do not even invoke npm', () =>
+test('private builds do not even invoke npm', () =>
   fixture(async ({ directory, calls, options }) => {
-    for (const override of [
-      { interactive: false },
-      { env: { CI: 'true' } },
-      { env: { HYPER3D_UPDATE_CHECK: '0' } },
-    ])
-      assert.equal(
-        await startupUpdate(pkg, directory, { ...options, ...override }),
-        false,
-      );
     assert.equal(
-      await startupUpdate({ ...pkg, private: true }, directory, options),
+      await startupUpdate({ ...pkg, private: true }, { ...options, directory }),
       false,
     );
     assert.deepEqual(calls, []);
   }));
-test('local installs are untouched, opt-out only notifies, and a lock avoids concurrent updates', () =>
+test('local installs are untouched, default only notifies, and a lock avoids concurrent updates', () =>
   fixture(async ({ root, directory, calls, output, options }) => {
-    assert.equal(await startupUpdate(pkg, root, options), false);
+    assert.equal(
+      await startupUpdate(pkg, { ...options, directory: root }),
+      false,
+    );
     assert.deepEqual(
       calls.map((args) => args[0]),
       ['root'],
     );
-    await startupUpdate(pkg, directory, {
-      ...options,
-      env: { ...options.env, HYPER3D_AUTO_UPDATE: '0' },
-    });
+    assert.equal(await startupUpdate(pkg, { ...options, directory }), false);
     assert.match(output.join(''), /Update available/);
     assert.equal(
       calls.some((args) => args[0] === 'install'),
       false,
     );
-    await mkdir(join(options.env.HYPER3D_CONFIG_DIR, 'update.lock'));
+    await mkdir(join(options.cacheDir, 'update.lock'));
     assert.equal(
-      await startupUpdate({ ...pkg, version: '0.1.1' }, directory, options),
+      await startupUpdate(
+        { ...pkg, version: '0.1.1' },
+        { ...options, directory },
+      ),
       false,
     );
     assert.equal(calls.filter((args) => args[0] === 'view').length, 1);
@@ -89,9 +83,9 @@ test('registry failures warn, allow operation, and are throttled', () =>
       if (args[0] === 'view') throw new Error('offline');
       return value;
     };
-    assert.equal(await startupUpdate(pkg, directory, options), false);
+    assert.equal(await startupUpdate(pkg, { ...options, directory }), false);
     assert.match(output.join(''), /failed/);
-    assert.equal(await startupUpdate(pkg, directory, options), false);
+    assert.equal(await startupUpdate(pkg, { ...options, directory }), false);
     assert.equal(calls.filter((args) => args[0] === 'view').length, 1);
   }));
 test('prerelease installs follow their own channel', () => {
@@ -110,7 +104,10 @@ test('npm-linked source checkouts never self-update', () =>
       directory,
       process.platform === 'win32' ? 'junction' : 'dir',
     );
-    assert.equal(await startupUpdate(pkg, source, options), false);
+    assert.equal(
+      await startupUpdate(pkg, { ...options, directory: source }),
+      false,
+    );
     assert.deepEqual(
       calls.map((args) => args[0]),
       ['root'],
