@@ -56,7 +56,7 @@ jobs:
       - name: Publish with npm trusted publishing
         env:
           CHANNEL: ${{ steps.release.outputs.channel }}
-        run: npm publish release/*.tgz --access public --provenance --tag "$CHANNEL"
+        run: npm publish ./release/*.tgz --access public --provenance --tag "$CHANNEL"
       - name: Create stable GitHub release
         if: steps.release.outputs.channel == 'latest'
         env:
