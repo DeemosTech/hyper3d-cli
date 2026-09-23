@@ -21,11 +21,13 @@ export async function withClient<T>(
   const url = secureUrl(endpoint);
   const client = new Client({ name: 'hyper3d-cli', version });
   const credentials = await loadCredentials(endpoint);
+  const provider = credentials.clientId
+    ? createProvider(endpoint, credentials)
+    : undefined;
   const transport = new StreamableHTTPClientTransport(url, {
     requestInit: { headers: { 'X-Hyper3D-CLI-Version': version } },
-    authProvider: credentials.clientId
-      ? createProvider(endpoint, credentials)
-      : undefined,
+    authProvider: provider,
+    fetch: provider?.fetch,
   });
   try {
     await client.connect(transport, { timeout: 15000 });
@@ -129,6 +131,7 @@ export interface GenerateInput {
   mesh_mode?: string;
   tier?: string;
   quality_override?: number;
+  texture_delight?: boolean;
   geometry_file_format?: string;
 }
 

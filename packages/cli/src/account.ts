@@ -47,7 +47,6 @@ function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
 export async function accountInfo({ fetchFn = fetch } = {}) {
   const endpoint = endpoints.mcp;
   const data = await loadCredentials(endpoint);
-  const provider = data.clientId ? createProvider(endpoint, data) : undefined;
   let accessToken = data.tokens?.access_token;
   if (!accessToken) return { authenticated: false };
 
@@ -56,10 +55,16 @@ export async function accountInfo({ fetchFn = fetch } = {}) {
     return fetchFn(input, {
       ...init,
       redirect: 'error',
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.any([
+        AbortSignal.timeout(15000),
+        ...(init.signal ? [init.signal] : []),
+      ]),
     });
   };
 
+  const provider = data.clientId
+    ? createProvider(endpoint, data, request)
+    : undefined;
   let refreshed = false;
   const post_with_optional_token_refresh = async (
     path: string,
@@ -84,7 +89,10 @@ export async function accountInfo({ fetchFn = fetch } = {}) {
     ) {
       refreshed = true;
       await response.body?.cancel();
-      await auth(provider, { serverUrl: endpoint, fetchFn: request });
+      await auth(provider, {
+        serverUrl: endpoint,
+        fetchFn: provider.fetch,
+      });
       accessToken = provider.tokens()?.access_token;
       response = await send();
     }

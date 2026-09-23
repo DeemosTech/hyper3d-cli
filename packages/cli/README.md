@@ -61,18 +61,22 @@ hyper3d generate --prompt "a ceramic teapot" --format glb
 # From one image
 hyper3d generate --image ./reference.png
 
+# For reference images with highly reflective surfaces
+hyper3d generate --image ./reference.png --texture-delight
+
 # From multiple views, with an optional description
 hyper3d generate --image ./front.png --image ./side.jpg --prompt "a ceramic teapot"
 ```
 
 Provide a prompt, one to five images, or both. Generation options:
 
-| Option        | Accepted values                                                | Default when omitted         |
-| ------------- | -------------------------------------------------------------- | ---------------------------- |
-| `--tier`      | `Gen-2.5-Medium`, `Gen-2.5-High`, `Gen-2.5-Extreme-Low`        | `Gen-2.5-Medium`             |
-| `--mesh-mode` | `Raw`, `Quad`                                                  | `Raw`                        |
-| `--format`    | `glb`, `usdz`, `fbx`, `obj`, `stl`                             | `glb`                        |
-| `--quality`   | Target polygon count: Raw `500–1,000,000`; Quad `1,000–50,000` | Raw `500,000`; Quad `18,000` |
+| Option              | Accepted values                                                         | Default when omitted         |
+| ------------------- | ----------------------------------------------------------------------- | ---------------------------- |
+| `--tier`            | `Gen-2.5-Medium`, `Gen-2.5-High`, `Gen-2.5-Extreme-Low`                 | `Gen-2.5-Medium`             |
+| `--mesh-mode`       | `Raw`, `Quad`                                                           | `Raw`                        |
+| `--format`          | `glb`, `usdz`, `fbx`, `obj`, `stl`                                      | `glb`                        |
+| `--quality`         | Target polygon count: Raw `500–1,000,000`; Quad `1,000–50,000`          | Raw `500,000`; Quad `18,000` |
+| `--texture-delight` | Flag: enable texture de-lighting for highly reflective reference images | `false`                      |
 
 Defaults are applied by the server. The response includes a generation ID; use
 it in place of `<generation-id>` to check progress and retrieve the result:

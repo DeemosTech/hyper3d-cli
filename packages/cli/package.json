@@ -1,6 +1,6 @@
 {
   "name": "@hyper3d/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyper3D CLI backed by MCP",
   "repository": {
     "type": "git",
@@ -23,6 +23,7 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "commander": "^14.0.0",
+    "proper-lockfile": "^4.1.2",
     "semver": "^7.7.0",
     "zod": "^4.6.5"
   },

@@ -3,9 +3,8 @@
 ## Authentication and CIMD
 
 The CLI uses OAuth Device Flow for every interactive login. Its public CIMD
-client ID is `https://hyper3d.ai/oauth_cimd/cli.json`. Deploy the JSON in
-`oauth_cimd/cli.json` at that exact URL, anonymously with
-`Content-Type: application/json`. It declares Device Flow and refresh-token
+client ID is `https://hyper3d.ai/oauth_cimd/cli.json`. The public metadata declares
+Device Flow and refresh-token
 grants, with empty `redirect_uris` and `response_types`. No client secret or
 localhost callback is used. Publishing CIMD does not publish the CLI to npm.
 
@@ -17,18 +16,14 @@ npm run cli -- auth logout
 ```
 
 Login prints a code and opens the returned `verification_uri_complete` URL.
-The backend then redirects the browser to
-`https://hyper3d.ai/workspace/oauth/device?interaction=<handle>`.
-The CLI uses the returned verification URL, not a hardcoded frontend URL.
+The CLI follows the returned verification URL.
 The user confirms that the browser code matches the terminal, then authorizes
 the CLI. `--no-browser` only prints the link/code for SSH or another device.
 Failure to launch the browser leaves the same login waiting for manual approval.
 The CLI polls until success, denial or device-code expiry and handles polling
 backoff. Ctrl+C cancels login. Login never falls back to authorization-code/PKCE.
 
-Deploy the backend Device Flow support, frontend device confirmation page and
-updated CIMD, and add the exact client ID to `grant.device_flow_client_ids`
-before using this against production. The CLI fails explicitly when the server
+The CLI fails explicitly when the service
 does not advertise Device Flow. Existing MCP clients retain their own login flows.
 
 The SDK handles OAuth discovery, resource validation and subsequent token
@@ -41,6 +36,35 @@ No DCR fallback.
 Credentials are stored per endpoint in `~/.hyper3d` (directory mode 0700, token
 file mode 0600 on POSIX); they are not encrypted. On Windows, storage inherits
 the user's directory ACLs. `HYPER3D_CONFIG_DIR` can change that directory.
+Before login or refresh, the CLI verifies that the credential directory permits
+creating, renaming and removing a temporary file. A sandbox that can read saved
+tokens but cannot write them must fail before submitting a refresh token, since
+server-side rotation can invalidate the old token. Run with write access to the
+same config directory before retrying. This preflight cannot protect against
+permissions changing, disk failure or process termination after the request.
+SDK credential invalidation clears only the current provider's in-memory state;
+it does not erase credentials that another process may have saved. Explicit
+logout still removes the stored credentials.
+
+Account and MCP refresh requests share a per-credential `proper-lockfile` lock,
+using an atomic lock-directory creation on Linux, macOS and Windows. The parent
+directory is canonicalized so symlink aliases share a lock. The lock covers
+reloading credentials, requesting and consuming the token response, and atomic
+persistence. A waiting process reuses a newer, unexpired access token instead of
+refreshing again. SDK token-save callbacks acknowledge already-persisted
+responses without overwriting a later refresh or logout. Login persistence and
+logout also take the same lock; browser authorization does not hold it.
+
+Lock acquisition retries for approximately 10–20 seconds, then fails. A heartbeat
+updates the lock every 10 seconds; an abandoned lock becomes reclaimable after
+60 seconds. Refresh requests have a 15-second timeout. A detected compromised
+lock aborts the refresh and the old owner does not remove a replacement lock.
+This is local process coordination, not fencing against every OS pause or
+filesystem failure; server-side rotation recovery is still needed when a response
+or process is lost. No automatic network retry is added to refresh or business
+operations. All processes sharing credentials must use a version with locking;
+old CLI versions do not participate in this protocol.
+
 `auth status` (alias `auth info`) verifies credentials by calling the existing
 `POST /api/user/get_info` HTTP API. It displays the username, user UUID, and the
 separate regular, subscription and frozen credit balances of an authorized personal
@@ -53,8 +77,8 @@ the default output says the user is not authenticated; `--output json` returns
 explicitly rather than reporting a verified login.
 
 The CLI explicitly requests `rodin:generate rodin:read account:read offline_access`;
-it never requests every scope advertised by discovery. Deploy backend support for
-`account:read` and the updated official CIMD before using account lookup. Existing
+it never requests every scope advertised by discovery. Account lookup requires
+the `account:read` permission. Existing
 users must run `hyper3d auth login` again to grant the new permission. Refreshing
 an older grant does not add scopes. Existing MCP tool permissions and the public
 MCP discovery scope list remain unchanged.
@@ -99,7 +123,7 @@ integer timeout in seconds. It automatically chains wait-tool calls of at most
 
 Every MCP HTTP request includes `X-Hyper3D-CLI-Version`, read from the CLI's
 package version, matching the version sent in MCP initialization `clientInfo`.
-This lets the stateless backend read the CLI version on individual tool calls;
+This identifies the CLI version on individual tool calls;
 the OAuth `client_id` remains unchanged.
 
 ## CLI layers
@@ -121,8 +145,8 @@ the live server schema.
 
 `src/base_schema.json` is the single bundled reference snapshot of the public
 production tool list. It contains 7 tools and their input/output schemas, without
-schema versions or implementation adapters. Backend compatibility is handled by
-the backend; the CLI has one implementation of each operation.
+schema versions or implementation adapters. The CLI has one implementation of
+each operation.
 
 Actual requests are validated against the live server schema. Differences from
 the base input schema warn but do not reject input accepted by the server.

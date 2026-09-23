@@ -33,15 +33,23 @@ to `packages/cli/dist`. Tests exercise the compiled JavaScript. The build copies
 contract JSON into the artifact; consumers do not need TypeScript or install
 scripts. Do not commit `dist`.
 
-ESLint and Prettier follow the Hyper3D backend configuration: 80-column formatting,
+ESLint and Prettier enforce 80-column formatting,
 single quotes, trailing commas, sorted import groups, unused-import checks and
-type-aware promise rules. NestJS-specific rules do not apply to this CLI.
+type-aware promise rules.
 `npm run lint:fix` fixes lint issues; `npm run format:check` checks formatting
 without changing files. Tests and maintenance scripts are linted as JavaScript.
 
-CI checks formatting, lint, types, unit/integration tests, and actual packed
-installations on Linux, macOS and Windows with Node.js 22 and 24. Tests use local
-servers and fixtures; no production credentials or billable operations are needed.
+Development PRs check formatting and lint once on Linux. The full Linux, macOS
+and Windows matrix with Node.js 22 and 24 compiles with TypeScript, runs
+unit/integration tests, and checks actual packed installations. Compilation
+already checks types, so CI does not also run the standalone `typecheck` command.
+Tests use local servers and fixtures; no production credentials or billable
+operations are needed.
+
+Promotion PRs and main releases reuse successful prerelease verification only when
+their entire Git tree matches that verified commit. Otherwise they run full
+CI. Release policy and publication installation checks remain required. Changes
+to CI itself follow the same development -> prerelease -> main PR flow.
 
 `npm run test:install` packs the CLI, installs it into temporary global and local
 prefixes, and exercises its executable and one-off npm execution. It also verifies
@@ -50,3 +58,7 @@ normal npm dependencies and removes its temporary installations afterward.
 
 For integration details, see [architecture.md](docs/architecture.md).
 For publishing and repository protection, see [releasing.md](docs/releasing.md).
+
+Add the `skip-release` label to a PR before merging to skip its automatic npm
+publication and GitHub Release. CI still runs. The label applies only to that
+merge, so a later prerelease -> main PR may still publish normally.
