@@ -36,6 +36,15 @@ No DCR fallback.
 Credentials are stored per endpoint in `~/.hyper3d` (directory mode 0700, token
 file mode 0600 on POSIX); they are not encrypted. On Windows, storage inherits
 the user's directory ACLs. `HYPER3D_CONFIG_DIR` can change that directory.
+Before login or refresh, the CLI verifies that the credential directory permits
+creating, renaming and removing a temporary file. A sandbox that can read saved
+tokens but cannot write them must fail before submitting a refresh token, since
+server-side rotation can invalidate the old token. Run with write access to the
+same config directory before retrying. This preflight cannot protect against
+permissions changing, disk failure or process termination after the request.
+SDK credential invalidation clears only the current provider's in-memory state;
+it does not erase credentials that another process may have saved. Explicit
+logout still removes the stored credentials.
 `auth status` (alias `auth info`) verifies credentials by calling the existing
 `POST /api/user/get_info` HTTP API. It displays the username, user UUID, and the
 separate regular, subscription and frozen credit balances of an authorized personal

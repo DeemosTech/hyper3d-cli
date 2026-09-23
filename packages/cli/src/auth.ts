@@ -56,18 +56,35 @@ export async function loadCredentials(endpoint: string): Promise<Credentials> {
     throw error;
   }
 }
-async function saveCredentials(endpoint: string, data: Credentials) {
-  const path = credentialPath(endpoint);
+async function atomicWrite(path: string, contents: string) {
   await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${randomBytes(8).toString('hex')}.tmp`;
   try {
-    await writeFile(temporary, `${JSON.stringify(data)}\n`, {
+    await writeFile(temporary, contents, {
       mode: 0o600,
       flag: 'wx',
     });
     await rename(temporary, path);
   } finally {
     await rm(temporary, { force: true });
+  }
+}
+async function saveCredentials(endpoint: string, data: Credentials) {
+  await atomicWrite(credentialPath(endpoint), `${JSON.stringify(data)}\n`);
+}
+
+async function assertCredentialsWritable(endpoint: string) {
+  // Exercise the same create/rename/remove operations as token persistence.
+  // Permission bits alone cannot detect a sandbox denying directory writes.
+  const probe = `${credentialPath(endpoint)}.${randomBytes(8).toString('hex')}.probe`;
+  try {
+    await atomicWrite(probe, '');
+    await rm(probe, { force: true });
+  } catch (cause) {
+    throw new Error(
+      'Cannot write the credential store. Allow writes to the Hyper3D config directory before retrying; no token refresh was attempted.',
+      { cause },
+    );
   }
 }
 export async function logout(endpoint: string) {
@@ -98,18 +115,23 @@ export function createProvider(endpoint: string, data: Credentials) {
     clientInformation: () => ({ client_id: CLI_CLIENT_ID }),
     tokens: () => data.tokens,
     saveTokens: async (tokens: OAuthTokens) => {
-      data.tokens = {
-        ...tokens,
-        refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token,
+      const updated = {
+        ...data,
+        tokens: {
+          ...tokens,
+          refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token,
+        },
+        expiresAt: tokens.expires_in
+          ? Date.now() + tokens.expires_in * 1000
+          : undefined,
       };
-      data.expiresAt = tokens.expires_in
-        ? Date.now() + tokens.expires_in * 1000
-        : undefined;
-      await saveCredentials(endpoint, data);
+      await saveCredentials(endpoint, updated);
+      data = updated;
     },
-    prepareTokenRequest: () => {
+    prepareTokenRequest: async () => {
       if (!data.tokens?.refresh_token)
         throw new Error('Authentication expired. Run hyper3d auth login.');
+      await assertCredentialsWritable(endpoint);
       return new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: data.tokens.refresh_token,
@@ -120,9 +142,10 @@ export function createProvider(endpoint: string, data: Credentials) {
     },
     invalidateCredentials: async (scope: string) => {
       if (scope === 'all' || scope === 'tokens') {
+        // SDK recovery is local to this attempt. A failed/stale process must
+        // not erase credentials saved on disk by another invocation.
         delete data.tokens;
         delete data.expiresAt;
-        await saveCredentials(endpoint, data);
       }
     },
   };
@@ -347,6 +370,7 @@ export async function login(
   }: LoginOptions = {},
 ) {
   secureUrl(endpoint);
+  await assertCredentialsWritable(endpoint);
   const provider = createProvider(endpoint, {});
 
   // Set up cancellation and time limits for OAuth requests.
