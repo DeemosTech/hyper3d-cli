@@ -4,15 +4,35 @@ on:
     branches: [main, prerelease]
 permissions:
   contents: read
+  actions: read
 # Serialize publications across both channels. Never cancel an in-flight publish.
 concurrency:
   group: npm-publish
   cancel-in-progress: false
 jobs:
+  intent:
+    name: Release intent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.intent.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Read skip-release from the merged PR
+        id: intent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-intent.mjs
   verify:
     uses: ./.github/workflows/ci.yml
   publish:
-    needs: verify
+    needs: [verify, intent]
+    if: needs.intent.outputs.skip != 'true'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
