@@ -202,7 +202,7 @@
     {
       "name": "rodin_generate",
       "title": "Generate a Rodin 3D model",
-      "description": "Start a Rodin Gen-2.5 generation from a non-empty prompt, one or more reference images, or both. At least one of prompt or reference_upload_ids is required. For image references in ChatGPT Chat, first call rodin_import_images and pass the returned uploads[].upload_id values as reference_upload_ids in order. The presigned upload workflow uses rodin_create_uploads followed by successful HTTP PUT uploads. This consumes credits. The response includes display_url; present that URL only after the generation completes. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
+      "description": "Start a Rodin Gen-2.5 generation from a non-empty prompt, one or more reference images, or both. At least one of prompt or reference_upload_ids is required. For image references in ChatGPT Chat, first call rodin_import_images and pass the returned uploads[].upload_id values as reference_upload_ids in order. The presigned upload workflow uses rodin_create_uploads followed by successful HTTP PUT uploads. texture_delight defaults to false; setting it to true is recommended when reference images contain highly reflective surfaces. This consumes credits. The response includes display_url; present that URL only after the generation completes. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -231,6 +231,11 @@
             "type": "string",
             "enum": ["Gen-2.5-Medium", "Gen-2.5-High", "Gen-2.5-Extreme-Low"],
             "default": "Gen-2.5-Medium"
+          },
+          "texture_delight": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable texture de-lighting. Defaults to false; recommended when reference images contain highly reflective surfaces."
           },
           "quality_override": {
             "type": "integer",

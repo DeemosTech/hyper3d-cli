@@ -18,6 +18,7 @@ export interface GenerateOptions {
   prompt?: string;
   tier?: string;
   meshMode?: string;
+  textureDelight?: boolean;
   format?: string;
   quality?: number;
 }

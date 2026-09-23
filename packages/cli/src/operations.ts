@@ -76,6 +76,7 @@ export async function generate(
       prompt: options.prompt,
       tier: options.tier,
       mesh_mode: options.meshMode,
+      texture_delight: options.textureDelight,
       geometry_file_format: options.format,
       quality_override: options.quality,
     });

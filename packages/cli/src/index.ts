@@ -104,6 +104,10 @@ cli
   )
   .option('--mesh-mode <mode>', 'Mesh mode: Raw, Quad (server default: Raw)')
   .option(
+    '--texture-delight',
+    'Enable texture de-lighting; recommended for highly reflective reference images (server default: false)',
+  )
+  .option(
     '--format <format>',
     'Geometry format: glb, usdz, fbx, obj, stl (server default: glb)',
   )
