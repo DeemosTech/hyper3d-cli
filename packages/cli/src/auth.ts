@@ -203,7 +203,7 @@ async function discoverDeviceFlow(
     !metadata.grant_types_supported?.includes(DEVICE_GRANT_TYPE)
   )
     throw new Error(
-      'The server does not advertise Device Flow. Deploy and enable the backend before logging in.',
+      'The server does not advertise Device Flow. Contact the service administrator for login support.',
     );
   if (!metadata.token_endpoint) throw new Error('Missing OAuth token endpoint');
   secureUrl(metadata.token_endpoint);

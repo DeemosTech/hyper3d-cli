@@ -129,6 +129,7 @@ export interface GenerateInput {
   mesh_mode?: string;
   tier?: string;
   quality_override?: number;
+  texture_delight?: boolean;
   geometry_file_format?: string;
 }
 
