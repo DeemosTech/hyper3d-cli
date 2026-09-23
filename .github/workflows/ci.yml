@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -14,6 +15,8 @@ jobs:
   policy:
     name: Release policy
     runs-on: ubuntu-latest
+    outputs:
+      reuse: ${{ steps.verification.outputs.reuse }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,8 +27,19 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: node scripts/check-release-policy.mjs
+      - name: Check for a verified prerelease with identical contents
+        id: verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci-verification.mjs
+      - if: steps.verification.outputs.reuse != 'true'
+        run: npm run lint
+      - if: steps.verification.outputs.reuse != 'true'
+        run: npm run format:check
   test:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: policy
+    if: needs.policy.outputs.reuse != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -39,9 +53,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
+      # npm test compiles with tsc, preserving type checks on every platform.
       - run: npm test
       - run: npm run test:install
   checks:
@@ -50,8 +62,15 @@ jobs:
     needs: [policy, test]
     runs-on: ubuntu-latest
     steps:
-      - name: Require all platforms
+      - name: Require all platforms or a verified prerelease
         env:
           RESULT: ${{ needs.test.result }}
           POLICY: ${{ needs.policy.result }}
-        run: test "$RESULT" = success && test "$POLICY" = success
+          REUSE: ${{ needs.policy.outputs.reuse }}
+        run: |
+          test "$POLICY" = success
+          if [ "$REUSE" = true ]; then
+            test "$RESULT" = skipped
+          else
+            test "$RESULT" = success
+          fi

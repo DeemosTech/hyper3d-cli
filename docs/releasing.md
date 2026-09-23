@@ -46,8 +46,26 @@ workflow's exact commit, and creates a GitHub Release with generated notes and
 the npm tarball attached. Do not push tags manually to initiate publication;
 tag pushes do not trigger the release workflow.
 
-Both branches run the complete Linux/macOS/Windows and Node.js 22/24 matrix
-before publishing. Publishing jobs use a fresh dependency installation without
+Development PRs and prerelease pushes run the complete Linux/macOS/Windows and
+Node.js 22/24 matrix. Formatting and lint run once on Linux; every matrix entry
+compiles with TypeScript before testing, which also checks types without a
+duplicate `tsc --noEmit` run.
+
+Promotion PRs and main pushes can reuse an already successful prerelease Release
+run. The candidate must be the same repository's prerelease PR head, or the second
+parent of a main merge commit. Its entire Git tree must equal the checked-out
+merge result, and the Release workflow must have succeeded for that exact SHA
+on a prerelease push. A different tree, failed/pending verification, squash/rebase
+merge, missing history or unavailable Actions API falls back to full CI. Manual CI
+runs always use full verification. The workflow token needs `actions: read` to
+look up prerelease runs.
+
+`Release policy` always runs. `CI checks` accepts a skipped test matrix only
+when prerelease reuse was explicitly verified and the policy job succeeded. Keep
+both existing required checks in branch protection. CI changes themselves follow the
+normal development -> prerelease -> main flow.
+
+Publishing jobs use a fresh dependency installation without
 restoring npm caches, repeat the policy check, select the release version,
 reject duplicate or outdated registry versions, smoke-test the packed
 installation, upload a tarball artifact, and publish with npm OIDC provenance.
@@ -64,6 +82,24 @@ not publish or trigger duplicate CI. CI can also be run manually once its workfl
 is present on the default branch. Test jobs retain npm download caches under
 GitHub's repository cache limits; upload artifacts expire after 14 days. Artifact
 expiry does not delete npm versions or GitHub Release attachments.
+
+## Skipping a publication
+
+Add the `skip-release` label to the PR before merging into prerelease or main.
+The push workflow still runs verification, but skips the publish job, including
+npm publication, release artifact upload, tag creation and GitHub Release.
+Version policy and required branch checks are unchanged.
+
+Only the merged PR whose merge commit equals the pushed SHA and whose target is
+that branch controls the decision. A label on an earlier development PR does not
+carry over to a later promotion PR. Labels are read when the Release intent job
+runs; editing them later does not change an already-running publication. API
+lookup errors or an unidentified merged PR block publication. Re-running the full
+workflow reads labels again.
+
+Successful prerelease verification remains reusable even when publication was
+intentionally skipped: its full matrix still ran. This lets CI/documentation
+maintenance avoid a beta publication without losing verification evidence.
 
 ## One-time setup
 
