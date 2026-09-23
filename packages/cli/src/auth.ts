@@ -1,7 +1,14 @@
 import { execFile } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import {
+  mkdir,
+  readFile,
+  writeFile,
+  rename,
+  rm,
+  realpath,
+} from 'node:fs/promises';
+import { join, dirname, basename } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { promisify } from 'node:util';
 
@@ -11,6 +18,7 @@ import {
   selectResourceURL,
 } from '@modelcontextprotocol/sdk/client/auth.js';
 import { OAuthTokensSchema } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { lock } from 'proper-lockfile';
 
 import { secureUrl } from './endpoints.js';
 import { getConfigDir } from './utils.js';
@@ -56,12 +64,11 @@ export async function loadCredentials(endpoint: string): Promise<Credentials> {
     throw error;
   }
 }
-async function saveCredentials(endpoint: string, data: Credentials) {
-  const path = credentialPath(endpoint);
+async function atomicWrite(path: string, contents: string) {
   await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${randomBytes(8).toString('hex')}.tmp`;
   try {
-    await writeFile(temporary, `${JSON.stringify(data)}\n`, {
+    await writeFile(temporary, contents, {
       mode: 0o600,
       flag: 'wx',
     });
@@ -70,18 +77,157 @@ async function saveCredentials(endpoint: string, data: Credentials) {
     await rm(temporary, { force: true });
   }
 }
-export async function logout(endpoint: string) {
-  await rm(credentialPath(endpoint), { force: true });
+async function saveCredentials(endpoint: string, data: Credentials) {
+  await atomicWrite(credentialPath(endpoint), `${JSON.stringify(data)}\n`);
 }
 
-export function createProvider(endpoint: string, data: Credentials) {
+async function assertCredentialsWritable(endpoint: string) {
+  // Exercise the same create/rename/remove operations as token persistence.
+  // Permission bits alone cannot detect a sandbox denying directory writes.
+  const probe = `${credentialPath(endpoint)}.${randomBytes(8).toString('hex')}.probe`;
+  try {
+    await atomicWrite(probe, '');
+    await rm(probe, { force: true });
+  } catch (cause) {
+    throw new Error(
+      'Cannot write the credential store. Allow writes to the Hyper3D config directory before retrying; no token refresh was attempted.',
+      { cause },
+    );
+  }
+}
+export async function logout(endpoint: string) {
+  await withCredentialLock(endpoint, async () => {
+    await rm(credentialPath(endpoint), { force: true });
+  });
+}
+
+async function withCredentialLock<T>(
+  endpoint: string,
+  action: (signal: AbortSignal) => Promise<T>,
+) {
+  await assertCredentialsWritable(endpoint);
+  const path = credentialPath(endpoint);
+  const canonical = join(await realpath(dirname(path)), basename(path));
+  const compromised = new AbortController();
+  const release = await lock(canonical, {
+    realpath: false,
+    stale: 60000,
+    update: 10000,
+    retries: {
+      retries: 40,
+      factor: 1,
+      minTimeout: 250,
+      maxTimeout: 250,
+      randomize: true,
+    },
+    onCompromised: (error) => compromised.abort(error),
+  });
+  try {
+    const result = await action(compromised.signal);
+    compromised.signal.throwIfAborted();
+    return result;
+  } finally {
+    // proper-lockfile already relinquishes compromised locks. Never remove a
+    // replacement owner's lock from a resumed process.
+    if (!compromised.signal.aborted) await release();
+  }
+}
+
+export function createProvider(
+  endpoint: string,
+  data: Credentials,
+  fetchFn: typeof fetch = fetch,
+) {
   if (data.clientId && data.clientId !== CLI_CLIENT_ID)
     throw new Error(
       'Stored credentials belong to a different client. Run hyper3d auth login again.',
     );
   data = { ...data, clientId: CLI_CLIENT_ID };
   const metadata = clientMetadata();
+  const persistedResponses = new Map<string, number>();
+  const acknowledgeLater = (tokens: OAuthTokens) => {
+    const key = tokens.access_token;
+    persistedResponses.set(key, (persistedResponses.get(key) ?? 0) + 1);
+  };
+  const persist = async (tokens: OAuthTokens) => {
+    const updated = {
+      ...data,
+      tokens: {
+        ...tokens,
+        refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token,
+      },
+      expiresAt: tokens.expires_in
+        ? Date.now() + tokens.expires_in * 1000
+        : undefined,
+    };
+    await saveCredentials(endpoint, updated);
+    data = updated;
+  };
   return {
+    // Both account HTTP requests and MCP's internal SDK auth use this fetch.
+    // The token response is validated and persisted before releasing the lock;
+    // saveTokens below acknowledges it without writing stale data a second time.
+    fetch: (async (input, init) => {
+      const params =
+        init?.body instanceof URLSearchParams ? init.body : undefined;
+      if (params?.get('grant_type') !== 'refresh_token')
+        return fetchFn(input, init);
+      const requestedAccessToken = data.tokens?.access_token;
+      return withCredentialLock(endpoint, async (signal) => {
+        const latest = await loadCredentials(endpoint);
+        if (latest.clientId !== CLI_CLIENT_ID || !latest.tokens?.refresh_token)
+          throw new Error(
+            'Credentials changed or were removed. Run hyper3d auth login.',
+          );
+        if (
+          (latest.tokens.access_token !== requestedAccessToken ||
+            latest.tokens.refresh_token !== params.get('refresh_token')) &&
+          latest.tokens.access_token &&
+          (latest.expiresAt === undefined ||
+            latest.expiresAt > Date.now() + 30000)
+        ) {
+          data = latest;
+          acknowledgeLater(latest.tokens);
+          return Response.json({
+            ...latest.tokens,
+            expires_in:
+              latest.expiresAt === undefined
+                ? undefined
+                : Math.max(
+                    0,
+                    Math.floor((latest.expiresAt - Date.now()) / 1000),
+                  ),
+          });
+        }
+        data = latest;
+        const body = new URLSearchParams(params);
+        body.set('refresh_token', latest.tokens.refresh_token);
+        signal.throwIfAborted();
+        const response = await fetchFn(input, {
+          ...init,
+          body,
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(15000),
+            ...(init?.signal ? [init.signal] : []),
+          ]),
+        });
+        // Consume success and error bodies under the lock and request timeout.
+        // SDK parsing happens later, after this fetch returns.
+        const text = await response.text();
+        signal.throwIfAborted();
+        if (response.ok) {
+          const tokens = OAuthTokensSchema.parse(JSON.parse(text));
+          await persist(tokens);
+          acknowledgeLater(tokens);
+        }
+        return new Response(text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      });
+    }) as typeof fetch,
     redirectUrl: undefined,
     saveCodeVerifier: async () => {
       throw new Error('Use Device Flow via hyper3d auth login.');
@@ -98,18 +244,32 @@ export function createProvider(endpoint: string, data: Credentials) {
     clientInformation: () => ({ client_id: CLI_CLIENT_ID }),
     tokens: () => data.tokens,
     saveTokens: async (tokens: OAuthTokens) => {
-      data.tokens = {
-        ...tokens,
-        refresh_token: tokens.refresh_token ?? data.tokens?.refresh_token,
-      };
-      data.expiresAt = tokens.expires_in
-        ? Date.now() + tokens.expires_in * 1000
-        : undefined;
-      await saveCredentials(endpoint, data);
+      const acknowledgments = persistedResponses.get(tokens.access_token) ?? 0;
+      if (acknowledgments > 0) {
+        if (acknowledgments === 1)
+          persistedResponses.delete(tokens.access_token);
+        else persistedResponses.set(tokens.access_token, acknowledgments - 1);
+        return;
+      }
+      await withCredentialLock(endpoint, async (signal) => {
+        // Defensive check for callers that bypass provider.fetch. They must not
+        // overwrite credentials changed by another process or by logout.
+        const latest = await loadCredentials(endpoint);
+        if (
+          data.tokens &&
+          JSON.stringify(latest.tokens) !== JSON.stringify(data.tokens)
+        )
+          throw new Error(
+            'Credentials changed. Retry using the saved credentials.',
+          );
+        signal.throwIfAborted();
+        await persist(tokens);
+      });
     },
-    prepareTokenRequest: () => {
+    prepareTokenRequest: async () => {
       if (!data.tokens?.refresh_token)
         throw new Error('Authentication expired. Run hyper3d auth login.');
+      await assertCredentialsWritable(endpoint);
       return new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: data.tokens.refresh_token,
@@ -120,9 +280,10 @@ export function createProvider(endpoint: string, data: Credentials) {
     },
     invalidateCredentials: async (scope: string) => {
       if (scope === 'all' || scope === 'tokens') {
+        // SDK recovery is local to this attempt. A failed/stale process must
+        // not erase credentials saved on disk by another invocation.
         delete data.tokens;
         delete data.expiresAt;
-        await saveCredentials(endpoint, data);
       }
     },
   };
@@ -347,6 +508,7 @@ export async function login(
   }: LoginOptions = {},
 ) {
   secureUrl(endpoint);
+  await assertCredentialsWritable(endpoint);
   const provider = createProvider(endpoint, {});
 
   // Set up cancellation and time limits for OAuth requests.

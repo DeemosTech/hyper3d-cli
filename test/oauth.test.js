@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
 import {
   login,
@@ -11,6 +13,7 @@ import {
   DEVICE_GRANT_TYPE,
   CLI_CLIENT_ID,
   CLI_SCOPES,
+  credentialPath,
 } from '../packages/cli/dist/auth.js';
 
 const endpoint = 'https://api.example.com/mcp';
@@ -159,6 +162,129 @@ test('device login opens complete URL, backs off, saves credentials and SDK refr
     const refreshed = await loadCredentials(endpoint);
     assert.equal(refreshed.tokens.access_token, 'renewed');
     assert.equal(refreshed.tokens.refresh_token, 'refresh');
+  }));
+
+test('a read-only sandbox rejects refresh and login before token issuance, preserving stored credentials', () =>
+  isolated(async () => {
+    await login(endpoint, harness().options);
+    const before = await readFile(credentialPath(endpoint), 'utf8');
+    const directory = process.env.HYPER3D_CONFIG_DIR;
+    // OS permission bits still say writable. Node's permission model supplies
+    // a deterministic sandbox denial, including on Windows and under root.
+    const script = `
+      import assert from 'node:assert/strict';
+      import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+      import { createProvider, loadCredentials, login } from './packages/cli/dist/auth.js';
+      const endpoint = ${JSON.stringify(endpoint)};
+      const issuer = ${JSON.stringify(issuer)};
+      const json = ${json.toString()};
+      const DEVICE_GRANT_TYPE = ${JSON.stringify(DEVICE_GRANT_TYPE)};
+      const CLI_CLIENT_ID = ${JSON.stringify(CLI_CLIENT_ID)};
+      const CLI_SCOPES = ${JSON.stringify(CLI_SCOPES)};
+      const harness = ${harness.toString()};
+      const h = harness();
+      const provider = createProvider(endpoint, await loadCredentials(endpoint));
+      await assert.rejects(auth(provider, { serverUrl: endpoint, fetchFn: h.options.fetchFn }), /Cannot write the credential store/);
+      assert.equal(h.tokenParams.length, 0);
+      assert.equal(provider.tokens().refresh_token, 'refresh');
+      await assert.rejects(login(endpoint, h.options), /Cannot write the credential store/);
+      assert.equal(h.requests, 0);
+    `;
+    await promisify(execFile)(process.execPath, [
+      process.allowedNodeEnvironmentFlags.has('--permission')
+        ? '--permission'
+        : '--experimental-permission',
+      '--allow-fs-read=*',
+      '--input-type=module',
+      '--eval',
+      script,
+    ]);
+    assert.equal(await readFile(credentialPath(endpoint), 'utf8'), before);
+    assert.equal((await readdir(directory)).length, 1);
+    // The denied attempt must not prevent a later writable process refreshing.
+    const h = harness();
+    await auth(createProvider(endpoint, await loadCredentials(endpoint)), {
+      serverUrl: endpoint,
+      fetchFn: h.options.fetchFn,
+    });
+    assert.equal(h.tokenParams.length, 1);
+    assert.equal(
+      (await loadCredentials(endpoint)).tokens.access_token,
+      'renewed',
+    );
+    assert.equal((await readdir(directory)).length, 1);
+  }));
+
+test('OAuth rejection does not erase newer credentials saved by another process', () =>
+  isolated(async () => {
+    await login(endpoint, harness().options);
+    for (const error of [
+      'invalid_grant',
+      'invalid_client',
+      'unauthorized_client',
+    ]) {
+      const provider = createProvider(
+        endpoint,
+        await loadCredentials(endpoint),
+      );
+      const h = harness();
+      await assert.rejects(
+        auth(provider, {
+          serverUrl: endpoint,
+          fetchFn: async (input, init) => {
+            if (new URL(input).pathname !== '/token')
+              return h.options.fetchFn(input, init);
+            await createProvider(endpoint, {}).saveTokens({
+              access_token: 'another-process-access',
+              refresh_token: 'another-process-refresh',
+              token_type: 'Bearer',
+            });
+            return json({ error }, 400);
+          },
+        }),
+        /auth login/,
+      );
+      assert.equal(provider.tokens(), undefined);
+      assert.equal(
+        (await loadCredentials(endpoint)).tokens.refresh_token,
+        'another-process-refresh',
+      );
+    }
+  }));
+
+test('rotated refresh tokens are persisted and transient network failures preserve them', () =>
+  isolated(async () => {
+    await login(endpoint, harness().options);
+    const provider = createProvider(endpoint, await loadCredentials(endpoint));
+    const h = harness();
+    await auth(provider, {
+      serverUrl: endpoint,
+      fetchFn: async (input, init) =>
+        new URL(input).pathname === '/token'
+          ? json({
+              access_token: 'rotated-access',
+              refresh_token: 'rotated-refresh',
+              token_type: 'Bearer',
+            })
+          : h.options.fetchFn(input, init),
+    });
+    const before = await readFile(credentialPath(endpoint), 'utf8');
+    assert.equal(
+      (await loadCredentials(endpoint)).tokens.refresh_token,
+      'rotated-refresh',
+    );
+    await assert.rejects(
+      auth(provider, {
+        serverUrl: endpoint,
+        fetchFn: async (input, init) => {
+          if (new URL(input).pathname === '/token')
+            throw new TypeError('network failed');
+          return h.options.fetchFn(input, init);
+        },
+      }),
+      /network failed/,
+    );
+    assert.equal(await readFile(credentialPath(endpoint), 'utf8'), before);
   }));
 
 test('no-browser and browser launch failure both complete the same device flow', () =>
