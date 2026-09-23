@@ -45,6 +45,26 @@ permissions changing, disk failure or process termination after the request.
 SDK credential invalidation clears only the current provider's in-memory state;
 it does not erase credentials that another process may have saved. Explicit
 logout still removes the stored credentials.
+
+Account and MCP refresh requests share a per-credential `proper-lockfile` lock,
+using an atomic lock-directory creation on Linux, macOS and Windows. The parent
+directory is canonicalized so symlink aliases share a lock. The lock covers
+reloading credentials, requesting and consuming the token response, and atomic
+persistence. A waiting process reuses a newer, unexpired access token instead of
+refreshing again. SDK token-save callbacks acknowledge already-persisted
+responses without overwriting a later refresh or logout. Login persistence and
+logout also take the same lock; browser authorization does not hold it.
+
+Lock acquisition retries for approximately 10–20 seconds, then fails. A heartbeat
+updates the lock every 10 seconds; an abandoned lock becomes reclaimable after
+60 seconds. Refresh requests have a 15-second timeout. A detected compromised
+lock aborts the refresh and the old owner does not remove a replacement lock.
+This is local process coordination, not fencing against every OS pause or
+filesystem failure; server-side rotation recovery is still needed when a response
+or process is lost. No automatic network retry is added to refresh or business
+operations. All processes sharing credentials must use a version with locking;
+old CLI versions do not participate in this protocol.
+
 `auth status` (alias `auth info`) verifies credentials by calling the existing
 `POST /api/user/get_info` HTTP API. It displays the username, user UUID, and the
 separate regular, subscription and frozen credit balances of an authorized personal
