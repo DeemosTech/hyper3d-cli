@@ -33,9 +33,9 @@ to `packages/cli/dist`. Tests exercise the compiled JavaScript. The build copies
 contract JSON into the artifact; consumers do not need TypeScript or install
 scripts. Do not commit `dist`.
 
-ESLint and Prettier follow the Hyper3D backend configuration: 80-column formatting,
+ESLint and Prettier enforce 80-column formatting,
 single quotes, trailing commas, sorted import groups, unused-import checks and
-type-aware promise rules. NestJS-specific rules do not apply to this CLI.
+type-aware promise rules.
 `npm run lint:fix` fixes lint issues; `npm run format:check` checks formatting
 without changing files. Tests and maintenance scripts are linted as JavaScript.
 

@@ -100,5 +100,5 @@ do not republish or move an existing tag. An already-existing stable tag also
 blocks publication before npm is changed. A rerun of a beta workflow gets a new
 attempt suffix, provided its planned version is still above main and latest.
 
-Before releasing, verify the deployed Device Flow and official CIMD client metadata.
-See [architecture.md](architecture.md) for the backend integration contract.
+Before releasing, verify CLI login using Device Flow and the public CIMD client metadata.
+See [architecture.md](architecture.md) for authentication and compatibility details.

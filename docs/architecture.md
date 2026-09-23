@@ -3,9 +3,8 @@
 ## Authentication and CIMD
 
 The CLI uses OAuth Device Flow for every interactive login. Its public CIMD
-client ID is `https://hyper3d.ai/oauth_cimd/cli.json`. Deploy the JSON in
-`oauth_cimd/cli.json` at that exact URL, anonymously with
-`Content-Type: application/json`. It declares Device Flow and refresh-token
+client ID is `https://hyper3d.ai/oauth_cimd/cli.json`. The public metadata declares
+Device Flow and refresh-token
 grants, with empty `redirect_uris` and `response_types`. No client secret or
 localhost callback is used. Publishing CIMD does not publish the CLI to npm.
 
@@ -17,18 +16,14 @@ npm run cli -- auth logout
 ```
 
 Login prints a code and opens the returned `verification_uri_complete` URL.
-The backend then redirects the browser to
-`https://hyper3d.ai/workspace/oauth/device?interaction=<handle>`.
-The CLI uses the returned verification URL, not a hardcoded frontend URL.
+The CLI follows the returned verification URL.
 The user confirms that the browser code matches the terminal, then authorizes
 the CLI. `--no-browser` only prints the link/code for SSH or another device.
 Failure to launch the browser leaves the same login waiting for manual approval.
 The CLI polls until success, denial or device-code expiry and handles polling
 backoff. Ctrl+C cancels login. Login never falls back to authorization-code/PKCE.
 
-Deploy the backend Device Flow support, frontend device confirmation page and
-updated CIMD, and add the exact client ID to `grant.device_flow_client_ids`
-before using this against production. The CLI fails explicitly when the server
+The CLI fails explicitly when the service
 does not advertise Device Flow. Existing MCP clients retain their own login flows.
 
 The SDK handles OAuth discovery, resource validation and subsequent token
@@ -53,8 +48,8 @@ the default output says the user is not authenticated; `--output json` returns
 explicitly rather than reporting a verified login.
 
 The CLI explicitly requests `rodin:generate rodin:read account:read offline_access`;
-it never requests every scope advertised by discovery. Deploy backend support for
-`account:read` and the updated official CIMD before using account lookup. Existing
+it never requests every scope advertised by discovery. Account lookup requires
+the `account:read` permission. Existing
 users must run `hyper3d auth login` again to grant the new permission. Refreshing
 an older grant does not add scopes. Existing MCP tool permissions and the public
 MCP discovery scope list remain unchanged.
@@ -99,7 +94,7 @@ integer timeout in seconds. It automatically chains wait-tool calls of at most
 
 Every MCP HTTP request includes `X-Hyper3D-CLI-Version`, read from the CLI's
 package version, matching the version sent in MCP initialization `clientInfo`.
-This lets the stateless backend read the CLI version on individual tool calls;
+This identifies the CLI version on individual tool calls;
 the OAuth `client_id` remains unchanged.
 
 ## CLI layers
@@ -121,8 +116,8 @@ the live server schema.
 
 `src/base_schema.json` is the single bundled reference snapshot of the public
 production tool list. It contains 7 tools and their input/output schemas, without
-schema versions or implementation adapters. Backend compatibility is handled by
-the backend; the CLI has one implementation of each operation.
+schema versions or implementation adapters. The CLI has one implementation of
+each operation.
 
 Actual requests are validated against the live server schema. Differences from
 the base input schema warn but do not reject input accepted by the server.
