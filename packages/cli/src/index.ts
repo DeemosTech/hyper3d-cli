@@ -11,7 +11,16 @@ import {
   configureEndpoints,
   endpoints,
 } from './endpoints.js';
-import { generate, status, result, poll, bang } from './operations.js';
+import {
+  generate,
+  status,
+  result,
+  poll,
+  bang,
+  agentic,
+  rigging,
+  animationPresets,
+} from './operations.js';
 import { formatOutput } from './output.js';
 import { checkUpdate, update, startupUpdate, updateChannel } from './update.js';
 import { getConfigDir } from './utils.js';
@@ -47,7 +56,16 @@ cli.hook('preAction', () => {
 cli.hook('preAction', async (_root, command) => {
   if (
     command.parent !== cli ||
-    !['generate', 'status', 'poll', 'result', 'bang'].includes(command.name())
+    ![
+      'generate',
+      'status',
+      'poll',
+      'result',
+      'bang',
+      'agentic',
+      'rigging',
+      'animation-presets',
+    ].includes(command.name())
   )
     return;
   if (
@@ -117,6 +135,64 @@ cli
     Number,
   )
   .action(async (options) => print(await generate(options)));
+
+const collect = (value: string, values: string[]) => [...values, value];
+cli
+  .command('agentic')
+  .description(
+    'Generate from multi-view collages or design concept images (1-5 images)',
+  )
+  .option(
+    '--image <path>',
+    'Reference image; repeat up to five times',
+    collect,
+    [],
+  )
+  .option(
+    '--prompt <text>',
+    'Optional description; omitted or blank derives it from images',
+  )
+  .option(
+    '--tier <tier>',
+    'Budget tier: basic, standard, pro (default: standard)',
+  )
+  .option(
+    '--format <format>',
+    'Export format: glb, usdz, fbx, stl (default: glb)',
+  )
+  .action(async (options) => print(await agentic(options)));
+
+cli
+  .command('animation-presets')
+  .description('List animation categories, or exact preset IDs in a category')
+  .option('--category <category>', 'Category returned by this command')
+  .action(async (options) => print(await animationPresets(options.category)));
+
+cli
+  .command('rigging <generation-id>')
+  .description(
+    'Rig a model with confirmed geometry, optionally adding animations',
+  )
+  .requiredOption(
+    '--bone-template <template>',
+    'human, quadruped, ue, unity, actorcore, custom',
+  )
+  .option('--skeleton-description <text>', 'Required only for custom skeletons')
+  .option('--skinning-method <method>', 'shell or core (default: shell)')
+  .option('--format <format>', 'glb, fbx, usdz (default: glb)')
+  .option(
+    '--animation-preset <id>',
+    'Exact preset ID; repeat up to ten times',
+    collect,
+    [],
+  )
+  .option(
+    '--animation <path>',
+    'FBX with one clip matching the target rig; repeat up to ten times; excludes presets',
+    collect,
+    [],
+  )
+  .action(async (id, options) => print(await rigging(id, options)));
 
 // poll
 for (const [command, action] of [

@@ -60,6 +60,25 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
         ],
       }),
     );
+    for (const name of [
+      'rodin_generate_rigging',
+      'rodin_list_animation_presets',
+    ]) {
+      mcp.registerTool(
+        name,
+        {
+          inputSchema: {
+            asset_id: z.string().optional(),
+            bone_template: z.string().optional(),
+            animation_preset: z.array(z.string()).optional(),
+            category: z.string().optional(),
+          },
+        },
+        async (input) => ({
+          content: [{ type: 'text', text: JSON.stringify(input) }],
+        }),
+      );
+    }
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -113,6 +132,40 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.doesNotMatch(help.stdout, /^\s+(tools|schema)(?:\s|$)/m);
     assert.match(help.stdout, /--output <format>/);
     assert.doesNotMatch(help.stdout, /--schema-version/);
+    for (const command of ['agentic', 'rigging', 'animation-presets']) {
+      assert.match(help.stdout, new RegExp(command));
+      assert.equal((await run([command, '--help'])).code, 0);
+    }
+    const rigged = await run([
+      'rigging',
+      'd1bb98f2-48be-4be1-9818-d49de002497a',
+      '--bone-template',
+      'human',
+      '--animation-preset',
+      'Human/Dance',
+      '--output',
+      'json',
+    ]);
+    assert.equal(rigged.code, 0, rigged.stderr);
+    assert.equal(JSON.parse(rigged.stdout).bone_template, 'human');
+    assert.deepEqual(JSON.parse(rigged.stdout).animation_preset, [
+      'Human/Dance',
+    ]);
+    const presets = await run([
+      'animation-presets',
+      '--category',
+      'Human',
+      '--output',
+      'json',
+    ]);
+    assert.equal(presets.code, 0, presets.stderr);
+    assert.equal(JSON.parse(presets.stdout).category, 'Human');
+    const missingTemplate = await run([
+      'rigging',
+      'd1bb98f2-48be-4be1-9818-d49de002497a',
+    ]);
+    assert.equal(missingTemplate.code, 1);
+    assert.match(missingTemplate.stderr, /required option/);
     const generated = await run([
       'generate',
       '--prompt',

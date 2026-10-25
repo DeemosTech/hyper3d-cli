@@ -6,6 +6,10 @@ import {
   rodinCreateUploads,
   rodinGenerate,
   rodinGenerateBang,
+  rodinGenerateAgentic,
+  rodinGenerateRigging,
+  rodinListAnimationPresets,
+  validateOperation,
   rodinGetStatus,
   rodinGetResult,
   rodinWait,
@@ -15,7 +19,7 @@ import {
 import { omitUndefined } from './utils.js';
 
 import type { ToolContext } from './mcp.js';
-import type { GenerateOptions } from './types.js';
+import type { Payload, GenerateOptions } from './types.js';
 
 const mimeTypes: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -56,7 +60,11 @@ export async function poll(
         generation_id: generationId,
         timeout_seconds: waitSeconds,
       });
-      if (latest.timed_out !== true) return latest;
+      if (
+        ['completed', 'failed', 'unknown'].includes(latest.status) ||
+        latest.timed_out !== true
+      )
+        return latest;
       remainingSeconds -= waitSeconds;
     } while (remainingSeconds > 0);
     return latest;
@@ -80,73 +88,14 @@ export async function generate(
       geometry_file_format: options.format,
       quality_override: options.quality,
     });
-    const images = await Promise.all(
-      paths.map(async (path) => {
-        const mime = mimeTypes[extname(path).toLowerCase()];
-        if (!mime) throw new Error(`Unsupported image file extension: ${path}`);
-        if (!(await stat(path)).isFile())
-          throw new Error(`Image is not a regular file: ${path}`);
-        const body = await readFile(path);
-        if (!body.length) throw new Error(`Image is empty: ${path}`);
-        return {
-          body,
-          file: {
-            filename: basename(path),
-            mime_type: mime,
-            size_bytes: body.length,
-          },
-        };
-      }),
+    await uploadFiles(
+      paths,
+      'image',
+      input,
+      'reference_upload_ids',
+      (value) => validateGenerate(context, value),
+      context,
     );
-    // Validate generation options before creating uploads. IDs are assigned below.
-    validateGenerate(context, {
-      ...input,
-      ...(images.length
-        ? { reference_upload_ids: images.map(() => randomUUID()) }
-        : {}),
-    });
-    if (images.length) {
-      const { uploads } = await rodinCreateUploads(context, {
-        files: images.map((image) => image.file),
-      });
-      if (!Array.isArray(uploads) || uploads.length !== images.length)
-        throw new Error(
-          'Server returned an unexpected number of image uploads',
-        );
-      // Validate all destinations before sending any image bytes.
-      for (const upload of uploads) {
-        const url = new URL(upload.upload_url);
-        if (url.protocol !== 'https:')
-          throw new Error('Image upload URL must use HTTPS');
-        if (
-          upload.method !== 'PUT' ||
-          typeof upload.upload_id !== 'string' ||
-          !upload.headers ||
-          typeof upload.headers['Content-Type'] !== 'string'
-        )
-          throw new Error('Server returned an invalid image upload');
-      }
-      validateGenerate(context, {
-        ...input,
-        reference_upload_ids: uploads.map((u) => u.upload_id),
-      });
-      for (const [index, upload] of uploads.entries()) {
-        // Presigned URL authentication only; never forward MCP credentials.
-        const response = await fetch(upload.upload_url, {
-          method: 'PUT',
-          headers: upload.headers,
-          body: images[index].body,
-          redirect: 'error',
-          signal: AbortSignal.timeout(60000),
-        });
-        await response.body?.cancel();
-        if (!response.ok)
-          throw new Error(
-            `Image ${index + 1} upload failed (HTTP ${response.status}); generation was not started`,
-          );
-      }
-      input.reference_upload_ids = uploads.map((upload) => upload.upload_id);
-    }
     return rodinGenerate(context, input);
   }, context);
 }
@@ -186,6 +135,181 @@ export async function bang(
           geometry_file_format: options.format,
         }),
       }),
+    context,
+  );
+}
+
+async function uploadFiles(
+  paths: string[],
+  kind: 'image' | 'animation',
+  input: Payload,
+  idField: string,
+  validate: (value: Payload) => void,
+  context: ToolContext,
+) {
+  const files = await Promise.all(
+    paths.map(async (path) => {
+      const mime =
+        kind === 'animation'
+          ? extname(path).toLowerCase() === '.fbx'
+            ? 'application/octet-stream'
+            : undefined
+          : mimeTypes[extname(path).toLowerCase()];
+      if (!mime) throw new Error(`Unsupported upload file extension: ${path}`);
+      const metadata = await stat(path);
+      if (!metadata.isFile())
+        throw new Error(`File is not a regular file: ${path}`);
+      if (metadata.size > (kind === 'animation' ? 25 : 20) * 1024 * 1024)
+        throw new Error('Upload file exceeds size limit');
+      const body = await readFile(path);
+      if (body.length > (kind === 'animation' ? 25 : 20) * 1024 * 1024)
+        throw new Error('Upload file exceeds size limit');
+      if (!body.length) throw new Error(`File is empty: ${path}`);
+      return {
+        body,
+        file: {
+          filename: basename(path),
+          mime_type: mime,
+          size_bytes: body.length,
+        },
+      };
+    }),
+  );
+  // Validate generation options before creating uploads. IDs are assigned below.
+  validate({
+    ...input,
+    ...(files.length ? { [idField]: files.map(() => randomUUID()) } : {}),
+  });
+  if (files.length) {
+    const { uploads } = await rodinCreateUploads(context, {
+      ...(kind === 'animation' ? { kind } : {}),
+      files: files.map((image) => image.file),
+    });
+    if (!Array.isArray(uploads) || uploads.length !== files.length)
+      throw new Error('Server returned an unexpected number of uploads');
+    // Validate all destinations before sending any file bytes.
+    for (const upload of uploads) {
+      const url = new URL(upload.upload_url);
+      if (url.protocol !== 'https:')
+        throw new Error('Upload URL must use HTTPS');
+      if (
+        upload.method !== 'PUT' ||
+        typeof upload.upload_id !== 'string' ||
+        !upload.headers ||
+        typeof upload.headers['Content-Type'] !== 'string'
+      )
+        throw new Error('Server returned an invalid upload');
+    }
+    validate({
+      ...input,
+      [idField]: uploads.map((u) => u.upload_id),
+    });
+    for (const [index, upload] of uploads.entries()) {
+      // Presigned URL authentication only; never forward MCP credentials.
+      const response = await fetch(upload.upload_url, {
+        method: 'PUT',
+        headers: upload.headers,
+        body: files[index].body,
+        redirect: 'error',
+        signal: AbortSignal.timeout(60000),
+      });
+      await response.body?.cancel();
+      if (!response.ok)
+        throw new Error(
+          `File ${index + 1} upload failed (HTTP ${response.status}); generation was not started`,
+        );
+    }
+    input[idField] = uploads.map((upload) => upload.upload_id);
+  }
+}
+
+export interface AgenticOptions {
+  image?: string[];
+  prompt?: string;
+  tier?: string;
+  format?: string;
+}
+
+export async function agentic(options: AgenticOptions, context?: ToolContext) {
+  return withToolContext(async (context) => {
+    const paths = options.image ?? [];
+    if (!paths.length || paths.length > 5)
+      throw new Error('Provide one to five --image files');
+    const input = omitUndefined({
+      prompt: options.prompt,
+      tier: options.tier,
+      export_type: options.format,
+    });
+    await uploadFiles(
+      paths,
+      'image',
+      input,
+      'reference_upload_ids',
+      (value) => validateOperation(context, 'rodin_generate_agentic', value),
+      context,
+    );
+    return rodinGenerateAgentic(context, input);
+  }, context);
+}
+
+export interface RiggingOptions {
+  boneTemplate: string;
+  skeletonDescription?: string;
+  skinningMethod?: string;
+  format?: string;
+  animationPreset?: string[];
+  animation?: string[];
+}
+
+export async function rigging(
+  assetId: string,
+  options: RiggingOptions,
+  context?: ToolContext,
+) {
+  return withToolContext(async (context) => {
+    const paths = options.animation ?? [];
+    const presets = options.animationPreset ?? [];
+    if (paths.length && presets.length)
+      throw new Error('Use --animation or --animation-preset, not both');
+    if (paths.length > 10 || presets.length > 10)
+      throw new Error('Provide at most ten animations');
+    if (new Set(presets).size !== presets.length)
+      throw new Error('Animation presets must be distinct');
+    if (
+      options.boneTemplate === 'custom'
+        ? !options.skeletonDescription?.trim()
+        : options.skeletonDescription !== undefined
+    )
+      throw new Error(
+        '--skeleton-description is required only for --bone-template custom',
+      );
+    const input = omitUndefined({
+      asset_id: assetId,
+      bone_template: options.boneTemplate,
+      skeleton_description: options.skeletonDescription,
+      skinning_method: options.skinningMethod,
+      geometry_file_format: options.format,
+      animation_preset: presets.length ? presets : undefined,
+    });
+    await uploadFiles(
+      paths,
+      'animation',
+      input,
+      'animation_upload_ids',
+      (value) => validateOperation(context, 'rodin_generate_rigging', value),
+      context,
+    );
+    return rodinGenerateRigging(context, input);
+  }, context);
+}
+
+export async function animationPresets(
+  category?: string,
+  context?: ToolContext,
+) {
+  return withToolContext(
+    async (context) =>
+      rodinListAnimationPresets(context, omitUndefined({ category })),
     context,
   );
 }
