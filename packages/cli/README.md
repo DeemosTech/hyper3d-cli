@@ -49,6 +49,50 @@ Credentials are saved in `~/.hyper3d` by default and refreshed automatically whe
 needed. Set `HYPER3D_CONFIG_DIR` to use a different directory.
 Signing out locally does not revoke your server-side authorization.
 
+## Agentic and rigging
+
+Choose Agentic for geometry suited to editable n-gons and procedural construction,
+such as simple furniture, geometric props, and robots made of separate housings
+and uniform links. Choose `generate` for text-only requests, detailed sculpted
+characters, garments, or realistic car bodies. Judge the defining geometry, not
+just whether the object is hard-surface or organic.
+
+Agentic accepts ordinary single-subject images, multi-view collages, and concept
+sheets; image layout alone does not determine the best mode. For `generate`, crop
+collages or concept sheets locally into separate clear subject views first.
+**Agentic is beta:** reference fidelity and structural results may fall short of
+expectations.
+
+```sh
+hyper3d agentic --image ./concept.png --tier standard --format glb
+hyper3d animation-presets
+hyper3d animation-presets --category human
+hyper3d rigging <generation-id> --bone-template human --format glb
+# Copy an exact animation ID from animation-presets:
+hyper3d rigging <generation-id> --bone-template human --animation-preset <preset-id>
+hyper3d rigging <generation-id> --bone-template human --animation ./motion.fbx
+hyper3d rigging <generation-id> --bone-template custom --skeleton-description "four arms and two legs"
+```
+
+Agentic requires 1–5 images (20 MiB each). Its optional prompt is derived from
+images when omitted or blank. Budget tiers are `basic`, `standard`, and `pro`;
+export formats are `glb`, `usdz`, `fbx`, and `stl`. The result includes the chosen
+`high-poly` or `n-gons` producer.
+
+Rigging requires a model with confirmed geometry and an explicit bone template:
+`human`, `quadruped`, `ue`, `unity`, `actorcore`, or `custom`. Only `custom` accepts
+and requires `--skeleton-description`. Skinning defaults to `shell` (`core` is also
+supported); exports support `glb`, `fbx`, and `usdz`. Repeat `--animation-preset`
+or `--animation` up to ten times; these options cannot be combined. Each uploaded
+FBX must be at most 25 MiB, contain exactly one clip, and already match the target
+rig. Uploads are not retargeted; preset categories do not guarantee compatibility.
+
+Both commands consume credits and return a new generation ID. Use `status`,
+`poll`, and `result` with that ID. On `unknown`, stop polling and check `result`;
+do not resubmit automatically after a timeout. These commands require the
+corresponding server tools. Agentic follows backend PR #712 (released in backend
+v1.35.1); older or custom endpoints may not expose it.
+
 ## Generate a model
 
 Generation uses credits from the personal or team workspace you authorized at

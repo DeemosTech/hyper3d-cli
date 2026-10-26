@@ -1,11 +1,10 @@
 {
-  "source": "https://api.hyper3d.com/api/mcp",
-  "capturedAt": "2026-09-14T05:44:38.281Z",
+  "source": "https://github.com/DeemosTech/hyper3d-backend/pull/712",
   "tools": [
     {
       "name": "rodin_create_uploads",
-      "title": "Create Rodin reference image uploads",
-      "description": "Create one-hour presigned PUT URLs for 1-5 reference images. After uploading each image successfully, call rodin_generate with the returned upload IDs. ChatGPT Chat mode supports conversation attachments through rodin_import_images. If HTTP PUT is blocked and you know your environment supports granting network access, use its supported permission flow to request access to the hostname of the returned presigned upload URL, then retry PUT after access is granted. If PUT remains unavailable or your environment cannot grant access, tell the user in their language: \"My model environment cannot upload images. You can upload your images and generate a model at https://hyper3d.ai.\"",
+      "title": "Create Rodin image or animation uploads",
+      "description": "Create one-hour presigned PUT URLs for one batch of reference images or FBX animations. kind defaults to image: 1-5 images, at most 20 MiB each, for rodin_generate.reference_upload_ids or rodin_generate_agentic.reference_upload_ids. Use kind=animation for 1-10 FBX files, at most 25 MiB each, for rodin_generate_rigging.animation_upload_ids. Each FBX must contain exactly one animation clip (Take). Upload each file successfully before passing its ID to generation. If you cannot complete the HTTP PUT uploads, explain the limitation to the user in their language and suggest continuing at https://hyper3d.ai. In ChatGPT Chat mode, also suggest trying Work mode.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -21,32 +20,24 @@
                 },
                 "mime_type": {
                   "type": "string",
-                  "enum": [
-                    "image/jpeg",
-                    "image/png",
-                    "image/webp",
-                    "image/tiff",
-                    "image/gif",
-                    "image/avif",
-                    "image/heic",
-                    "image/heif",
-                    "image/bmp",
-                    "image/jp2",
-                    "image/jpx",
-                    "image/jpm",
-                    "image/mj2"
-                  ]
+                  "minLength": 1,
+                  "maxLength": 128
                 },
                 "size_bytes": {
                   "type": "integer",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 26214400
                 }
               },
               "required": ["filename", "mime_type", "size_bytes"],
               "additionalProperties": false
             },
             "minItems": 1,
-            "maxItems": 5
+            "maxItems": 10
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["image", "animation"]
           }
         },
         "required": ["files"],
@@ -122,87 +113,9 @@
       }
     },
     {
-      "name": "rodin_import_images",
-      "title": "Import Rodin reference images",
-      "description": "For ChatGPT Chat only: import 1-5 user-provided conversation image attachments through OpenAI file parameters. Use the file_id and download_url supplied by ChatGPT. file_name may include a local path such as /mnt/data/reference.jpg; Hyper3D keeps only the final filename (up to 128 characters). Hyper3D downloads and stores the images. On success, call rodin_generate with uploads[].upload_id in the same order as reference_upload_ids. If attachments cannot be passed, tell the user that the model environment cannot upload images and they can upload and generate at https://hyper3d.ai.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "images": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "download_url": {
-                  "type": "string"
-                },
-                "file_id": {
-                  "type": "string"
-                },
-                "mime_type": {
-                  "type": "string"
-                },
-                "file_name": {
-                  "type": "string",
-                  "description": "Original filename or local path, such as reference.jpg or /mnt/data/reference.jpg. Only the final filename is stored, up to 128 characters."
-                }
-              },
-              "required": ["download_url", "file_id"],
-              "additionalProperties": false
-            },
-            "minItems": 1,
-            "maxItems": 5
-          }
-        },
-        "required": ["images"],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "uploads": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "upload_id": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              },
-              "required": ["upload_id"],
-              "additionalProperties": false
-            }
-          }
-        },
-        "required": ["uploads"],
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "idempotentHint": false,
-        "openWorldHint": true
-      },
-      "execution": {
-        "taskSupport": "forbidden"
-      },
-      "_meta": {
-        "securitySchemes": [
-          {
-            "type": "oauth2",
-            "scopes": ["rodin:generate"]
-          }
-        ],
-        "openai/fileParams": ["images"]
-      }
-    },
-    {
       "name": "rodin_generate",
       "title": "Generate a Rodin 3D model",
-      "description": "Start a Rodin Gen-2.5 generation from a non-empty prompt, one or more reference images, or both. At least one of prompt or reference_upload_ids is required. For image references in ChatGPT Chat, first call rodin_import_images and pass the returned uploads[].upload_id values as reference_upload_ids in order. The presigned upload workflow uses rodin_create_uploads followed by successful HTTP PUT uploads. texture_delight defaults to false; setting it to true is recommended when reference images contain highly reflective surfaces. This consumes credits. The response includes display_url; present that URL only after the generation completes. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
+      "description": "Use this tool for text-only generation or image-based subjects whose defining geometry is not well suited to procedural n-gons modeling, such as detailed sculpted characters, garments, or realistic car bodies. Prefer rodin_generate_agentic for subjects with clear geometric construction, even when the image shows a single, clear object. For multi-view collages or design concept sheets, first crop the relevant views locally into separate reference images with one clear subject per image, or use rodin_generate_agentic directly; image layout alone does not determine the best tool. Start a Rodin Gen-2.5 generation from a non-empty prompt, one or more reference images, or both. At least one of prompt or reference_upload_ids is required. texture_delight defaults to false; setting it to true is recommended when reference images contain highly reflective surfaces. This consumes credits. The response includes display_url; present that URL only after the generation completes. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -220,7 +133,7 @@
             },
             "minItems": 1,
             "maxItems": 5,
-            "description": "One to five uploaded reference image IDs. Obtain these from rodin_import_images in ChatGPT Chat, or rodin_create_uploads followed by successful PUT uploads. Preserve the intended image order. Required when prompt is omitted."
+            "description": "One to five uploaded reference image IDs. Required when prompt is omitted."
           },
           "mesh_mode": {
             "type": "string",
@@ -388,7 +301,7 @@
     {
       "name": "rodin_get_status",
       "title": "Get Rodin generation status",
-      "description": "Read the current state and stage of a Rodin generation. stage contains a user-facing name plus a 1-based current position and stable total; current is 0 before the first stage starts.",
+      "description": "Read the state of a generation. When no job records remain, downloadable model files indicate completed; otherwise the state is unknown. stage contains a user-facing name plus a 1-based current position and stable total; current is 0 before the first stage starts.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -410,7 +323,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["queued", "processing", "completed", "failed"]
+            "enum": ["queued", "processing", "completed", "failed", "unknown"]
           },
           "stage": {
             "type": "object",
@@ -457,7 +370,7 @@
     {
       "name": "rodin_wait",
       "title": "Wait briefly for a Rodin generation",
-      "description": "Wait up to 45 seconds for a terminal state. A timeout returns the latest state and does not mean generation failed. Progress is reported as stage name/current/total, not a percentage.",
+      "description": "Wait up to 45 seconds for a terminal state; unknown also ends the wait. A timeout returns the latest state and does not mean generation failed. Progress is reported as stage name/current/total, not a percentage.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -485,7 +398,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["queued", "processing", "completed", "failed"]
+            "enum": ["queued", "processing", "completed", "failed", "unknown"]
           },
           "stage": {
             "type": "object",
@@ -599,6 +512,116 @@
           }
         ]
       }
+    },
+    {
+      "name": "rodin_generate_agentic",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reference_upload_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["basic", "standard", "pro"]
+          },
+          "export_type": {
+            "type": "string",
+            "enum": ["glb", "usdz", "fbx", "stl"]
+          }
+        },
+        "required": ["reference_upload_ids"],
+        "additionalProperties": false
+      },
+      "title": "Generate a 3D model with Agentic mode",
+      "description": "Prefer this tool for subjects whose defining shapes, proportions, and negative spaces can be expressed with editable n-gons and procedural construction using primitives, extrusions, profiles, sweeps, repetition, or booleans, such as simple furniture, geometric props, and robots made of separate housings and uniform links. Judge the geometry rather than the category: hard-surface objects are not always easy, and organic objects are not always unsuitable. Detailed figurative sculpting, fitted anatomical shells, tension-shaped soft assemblies, garments, and realistic car bodies are generally better suited to rodin_generate. Accepts ordinary single-subject images as well as multi-view collages and design concept sheets; these layouts alone do not guarantee suitability. Agentic mode is beta: reference fidelity and structural results may fall short of expectations. Explain these limitations to the user before submitting. Automatically choose the Rodin high-poly or Agentic n-gons pipeline from 1-5 reference images and export the final model. First upload images with rodin_create_uploads and HTTP PUT, then pass their IDs. An omitted or blank prompt is derived from the images. This consumes credits. Use rodin_get_status or rodin_wait to track completion, then rodin_get_result for downloads. If status is unknown, stop waiting and check rodin_get_result; do not resubmit automatically. Present display_url only after completion. If submission times out, do not retry automatically; ask the user to check Hyper3D Mine."
+    },
+    {
+      "name": "rodin_generate_rigging",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bone_template": {
+            "type": "string",
+            "enum": ["human", "quadruped", "ue", "unity", "actorcore", "custom"]
+          },
+          "skeleton_description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "skinning_method": {
+            "type": "string",
+            "enum": ["shell", "core"]
+          },
+          "geometry_file_format": {
+            "type": "string",
+            "enum": ["glb", "fbx", "usdz"]
+          },
+          "animation_preset": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 0,
+            "maxItems": 10
+          },
+          "animation_upload_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 0,
+            "maxItems": 10
+          }
+        },
+        "required": ["asset_id", "bone_template"],
+        "additionalProperties": false
+      },
+      "title": "Rig and animate a Rodin model",
+      "description": "Generate a skeleton and skinning for an existing Rodin model, optionally adding stock or uploaded FBX animations. Reuses confirmed geometry and textures. Exports Basic (2K) textures with All materials when confirmed textures exist, otherwise no materials. This consumes credits and creates a new generation_id. Use rodin_get_status or rodin_wait, then rodin_get_result for downloads. Present display_url only after completion. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine."
+    },
+    {
+      "name": "rodin_list_animation_presets",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "bird",
+              "canine",
+              "fish",
+              "heavy-hooved",
+              "human",
+              "lean-hooved",
+              "lizard",
+              "rodentia",
+              "sea-turtle"
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "title": "List Rodin rigging animation presets",
+      "description": "Discover built-in Rodin rigging animations. Without category, returns only categories. With category, returns only animations containing the preset IDs for that category. Use the exact returned IDs when selecting presets. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the preset catalog only and does not generate or modify models or consume credits."
     }
-  ]
+  ],
+  "sourceRevision": "7d289b47be678179e613cd4a1f446071e3b7e04c"
 }
