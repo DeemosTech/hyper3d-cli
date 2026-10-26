@@ -108,7 +108,9 @@ authentication
 // generate
 cli
   .command('generate')
-  .description('Generate a model from text and/or local reference images')
+  .description(
+    'Generate from text or images; suited to sculpted characters, garments and realistic car bodies',
+  )
   .option('--prompt <text>', 'Model description; required without --image')
   .option(
     '--image <path>',
@@ -140,7 +142,7 @@ const collect = (value: string, values: string[]) => [...values, value];
 cli
   .command('agentic')
   .description(
-    'Generate from multi-view collages or design concept images (1-5 images)',
+    'Generate procedural n-gons-friendly geometry from 1-5 images (beta)',
   )
   .option(
     '--image <path>',
@@ -160,7 +162,12 @@ cli
     '--format <format>',
     'Export format: glb, usdz, fbx, stl (default: glb)',
   )
-  .action(async (options) => print(await agentic(options)));
+  .action(async (options) => {
+    process.stderr.write(
+      'Agentic is beta: reference fidelity and structural results may fall short of expectations.\n',
+    );
+    print(await agentic(options));
+  });
 
 cli
   .command('animation-presets')

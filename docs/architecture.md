@@ -145,7 +145,7 @@ the live server schema.
 ## Tool schema
 
 `src/base_schema.json` is the bundled reference contract, updated against backend
-PR #712 at `b00facd9cc015291e184ffe3b9db0408d3fb6763`. It contains 9 tools, including
+PR #712 at `7d289b47be678179e613cd4a1f446071e3b7e04c`. It contains 9 tools, including
 Agentic generation, rigging, animation uploads and preset discovery. This is a
 source contract, not evidence of production deployment. It operates without
 schema versions or implementation adapters. The CLI has one implementation of

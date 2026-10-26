@@ -142,30 +142,38 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       '--bone-template',
       'human',
       '--animation-preset',
-      'Human/Dance',
+      'human/ArmStretching',
       '--output',
       'json',
     ]);
     assert.equal(rigged.code, 0, rigged.stderr);
     assert.equal(JSON.parse(rigged.stdout).bone_template, 'human');
     assert.deepEqual(JSON.parse(rigged.stdout).animation_preset, [
-      'Human/Dance',
+      'human/ArmStretching',
     ]);
     const presets = await run([
       'animation-presets',
       '--category',
-      'Human',
+      'human',
       '--output',
       'json',
     ]);
     assert.equal(presets.code, 0, presets.stderr);
-    assert.equal(JSON.parse(presets.stdout).category, 'Human');
+    assert.equal(JSON.parse(presets.stdout).category, 'human');
     const missingTemplate = await run([
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',
     ]);
     assert.equal(missingTemplate.code, 1);
     assert.match(missingTemplate.stderr, /required option/);
+    const agenticHelp = await run(['agentic', '--help']);
+    assert.match(agenticHelp.stdout, /procedural n-gons-friendly geometry/);
+    assert.match(agenticHelp.stdout, /beta/);
+    const invalidAgentic = await run(['agentic', '--output', 'json']);
+    assert.equal(invalidAgentic.code, 1);
+    assert.equal(invalidAgentic.stdout, '');
+    assert.match(invalidAgentic.stderr, /Agentic is beta/);
+    assert.match(invalidAgentic.stderr, /one to five/);
     const generated = await run([
       'generate',
       '--prompt',

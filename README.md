@@ -51,12 +51,22 @@ Signing out locally does not revoke your server-side authorization.
 
 ## Agentic and rigging
 
-For multi-view collages and design concept sheets, use Agentic mode:
+Choose Agentic for geometry suited to editable n-gons and procedural construction,
+such as simple furniture, geometric props, and robots made of separate housings
+and uniform links. Choose `generate` for text-only requests, detailed sculpted
+characters, garments, or realistic car bodies. Judge the defining geometry, not
+just whether the object is hard-surface or organic.
+
+Agentic accepts ordinary single-subject images, multi-view collages, and concept
+sheets; image layout alone does not determine the best mode. For `generate`, crop
+collages or concept sheets locally into separate clear subject views first.
+**Agentic is beta:** reference fidelity and structural results may fall short of
+expectations.
 
 ```sh
 hyper3d agentic --image ./concept.png --tier standard --format glb
 hyper3d animation-presets
-hyper3d animation-presets --category Human
+hyper3d animation-presets --category human
 hyper3d rigging <generation-id> --bone-template human --format glb
 # Copy an exact animation ID from animation-presets:
 hyper3d rigging <generation-id> --bone-template human --animation-preset <preset-id>
@@ -80,8 +90,8 @@ rig. Uploads are not retargeted; preset categories do not guarantee compatibilit
 Both commands consume credits and return a new generation ID. Use `status`,
 `poll`, and `result` with that ID. On `unknown`, stop polling and check `result`;
 do not resubmit automatically after a timeout. These commands require the
-corresponding server tools; Agentic follows backend PR #712 and is unavailable
-on endpoints where that change has not been deployed.
+corresponding server tools. Agentic follows backend PR #712 (released in backend
+v1.35.1); older or custom endpoints may not expose it.
 
 ## Generate a model
 

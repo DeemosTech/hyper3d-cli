@@ -150,11 +150,13 @@ test('rigging validates combinations and supports presets or skeleton only', asy
   );
   await rigging(
     id,
-    { boneTemplate: 'human', animationPreset: ['Human/Dance'] },
+    { boneTemplate: 'human', animationPreset: ['human/ArmStretching'] },
     context,
   );
   assert.equal(calls[0].arguments.skeleton_description, 'four arms');
-  assert.deepEqual(calls[1].arguments.animation_preset, ['Human/Dance']);
+  assert.deepEqual(calls[1].arguments.animation_preset, [
+    'human/ArmStretching',
+  ]);
   assert.equal(calls[0].arguments.animation_upload_ids, undefined);
 });
 
