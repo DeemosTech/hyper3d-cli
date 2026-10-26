@@ -147,24 +147,11 @@ export function validateGenerate(context: ToolContext, input: GenerateInput) {
 export async function rodinCreateUploads(
   context: ToolContext,
   input: {
+    kind?: 'image' | 'animation';
     files: { filename: string; mime_type: string; size_bytes: number }[];
   },
 ) {
   return call(context, 'rodin_create_uploads', input);
-}
-
-export async function rodinImportImages(
-  context: ToolContext,
-  input: {
-    images: {
-      download_url: string;
-      file_id: string;
-      mime_type?: string;
-      file_name?: string;
-    }[];
-  },
-) {
-  return call(context, 'rodin_import_images', input);
 }
 
 export async function rodinGenerate(
@@ -210,4 +197,38 @@ export async function rodinGetResult(
   input: { generation_id: string },
 ) {
   return call(context, 'rodin_get_result', input);
+}
+
+export function validateOperation(
+  context: ToolContext,
+  name: string,
+  input: Payload,
+) {
+  prepareCall(
+    name,
+    input,
+    context.remoteTools.find((tool) => tool.name === name),
+    () => {},
+  );
+}
+
+export async function rodinGenerateAgentic(
+  context: ToolContext,
+  input: Payload,
+) {
+  return call(context, 'rodin_generate_agentic', input);
+}
+
+export async function rodinGenerateRigging(
+  context: ToolContext,
+  input: Payload,
+) {
+  return call(context, 'rodin_generate_rigging', input);
+}
+
+export async function rodinListAnimationPresets(
+  context: ToolContext,
+  input: { category?: string },
+) {
+  return call(context, 'rodin_list_animation_presets', input);
 }

@@ -129,8 +129,9 @@ the OAuth `client_id` remains unchanged.
 ## CLI layers
 
 `src/index.ts` binds command-line arguments directly to the exported business
-functions in `src/operations.ts`: `generate`, `status`, `poll`, `result`, and
-`bang`. Business functions compose the named MCP tool functions exported by
+functions in `src/operations.ts`: `generate`, `status`, `poll`, `result`,
+`bang`, `agentic`, `rigging`, and `animationPresets`. Business functions compose
+the named MCP tool functions exported by
 `src/mcp.ts`, which handle schema validation and result decoding.
 There is no operations factory or dynamic tool-name dispatch in the CLI.
 
@@ -143,8 +144,10 @@ the live server schema.
 
 ## Tool schema
 
-`src/base_schema.json` is the single bundled reference snapshot of the public
-production tool list. It contains 7 tools and their input/output schemas, without
+`src/base_schema.json` is the bundled reference contract, updated against backend
+PR #712 at `7d289b47be678179e613cd4a1f446071e3b7e04c`. It contains 9 tools, including
+Agentic generation, rigging, animation uploads and preset discovery. This is a
+source contract, not evidence of production deployment. It operates without
 schema versions or implementation adapters. The CLI has one implementation of
 each operation.
 
