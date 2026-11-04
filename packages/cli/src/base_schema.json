@@ -1,5 +1,4 @@
 {
-  "source": "https://github.com/DeemosTech/hyper3d-backend/pull/712",
   "tools": [
     {
       "name": "rodin_create_uploads",
@@ -622,6 +621,5 @@
       "title": "List Rodin rigging animation presets",
       "description": "Discover built-in Rodin rigging animations. Without category, returns only categories. With category, returns only animations containing the preset IDs for that category. Use the exact returned IDs when selecting presets. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the preset catalog only and does not generate or modify models or consume credits."
     }
-  ],
-  "sourceRevision": "7d289b47be678179e613cd4a1f446071e3b7e04c"
+  ]
 }
