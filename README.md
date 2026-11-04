@@ -256,3 +256,19 @@ setting `HYPER3D_CONFIG_DIR`.
 For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [release guide](docs/releasing.md). Report problems in
 [GitHub Issues](https://github.com/DeemosTech/hyper3d-cli/issues).
+
+## Canary backend schema
+
+Use `--canary-schema` to select the bundled upcoming MCP contract and its matching
+upload behavior. The default contract remains unchanged. This flag does not
+switch servers; use `--base-url` when testing a separate backend.
+
+```sh
+hyper3d --canary-schema list_upload --kind model
+hyper3d --canary-schema generate --image ./reference.png
+hyper3d --canary-schema rigging --model ./character.glb --bone-template human
+```
+
+`list_upload` lists saved library files, not transient uploads. It accepts
+`--kind`, `--tag`, and `--page` and returns `files` and `total`. A saved model's
+`upload_id` can be passed to `rigging --model-upload-id <id>` in canary mode.

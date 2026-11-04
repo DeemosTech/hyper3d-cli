@@ -11,8 +11,10 @@ import {
   configureEndpoints,
   endpoints,
 } from './endpoints.js';
+import { configureSchema } from './mcp.js';
 import {
   generate,
+  listUploads,
   status,
   result,
   poll,
@@ -39,6 +41,10 @@ const print = (value: Payload, kind?: string) => {
 
 const cli = new Command('hyper3d').version(pkg.version);
 cli.option(
+  '--canary-schema',
+  'Use the bundled canary MCP contract and implementation',
+);
+cli.option(
   '--base-url <url>',
   'Hyper3D API base URL (overrides BASE_URL)',
   process.env.BASE_URL ?? DEFAULT_BASE_URL,
@@ -51,6 +57,7 @@ cli.addOption(
 
 cli.hook('preAction', () => {
   configureEndpoints(cli.opts().baseUrl);
+  configureSchema(cli.opts().canarySchema ? 'canary' : 'default');
 });
 
 cli.hook('preAction', async (_root, command) => {
@@ -176,7 +183,12 @@ cli
   .action(async (options) => print(await animationPresets(options.category)));
 
 cli
-  .command('rigging <generation-id>')
+  .command('rigging [generation-id]')
+  .option('--model <path>', 'Upload a local model (requires --canary-schema)')
+  .option(
+    '--model-upload-id <id>',
+    'Use a saved model upload (requires --canary-schema)',
+  )
   .description(
     'Rig a model with confirmed geometry, optionally adding animations',
   )
@@ -200,6 +212,18 @@ cli
     [],
   )
   .action(async (id, options) => print(await rigging(id, options)));
+
+cli
+  .command('list_upload')
+  .description('List saved library uploads (requires --canary-schema)')
+  .option('--kind <kind>', 'image, model or animation')
+  .option('--tag <tag>', 'Exact tag')
+  .option('--page <number>', 'Page number, 50 files per page', Number, 1)
+  .action(async (options) => {
+    if (!cli.opts().canarySchema)
+      throw new Error('list_upload requires --canary-schema');
+    print(await listUploads(options));
+  });
 
 // poll
 for (const [command, action] of [
