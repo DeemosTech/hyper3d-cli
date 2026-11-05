@@ -23,23 +23,6 @@ import type { ToolContext } from './mcp.js';
 import type { Payload, GenerateOptions } from './types.js';
 import type { UploadKind } from './upload-contract.js';
 
-const mimeTypes: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.tif': 'image/tiff',
-  '.tiff': 'image/tiff',
-  '.gif': 'image/gif',
-  '.avif': 'image/avif',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-  '.bmp': 'image/bmp',
-  '.jp2': 'image/jp2',
-  '.jpx': 'image/jpx',
-  '.jpm': 'image/jpm',
-  '.mj2': 'image/mj2',
-};
 const defaultPollTimeoutSeconds = 30;
 // Leave ample headroom under the MCP client's 60-second per-request timeout.
 const maximumWaitCallSeconds = 30;
@@ -149,27 +132,17 @@ async function uploadFiles(
   validate: (value: Payload) => void,
   context: ToolContext,
 ) {
-  const contract = uploadContract(context.schemaVersion);
+  const contract = uploadContract;
   const maxBytes = contract.maxBytes[kind];
-  if (paths.length && !maxBytes)
-    throw new Error('Model uploads require --canary-schema');
   const files = await Promise.all(
     paths.map(async (path) => {
-      const mime =
+      const supported =
         kind === 'model'
           ? /\.(glb|obj|stl|fbx|usd|usdz|usda|usdc)$/i.test(path)
-            ? 'application/octet-stream'
-            : undefined
           : kind === 'animation'
             ? extname(path).toLowerCase() === '.fbx'
-              ? 'application/octet-stream'
-              : undefined
-            : mimeTypes[extname(path).toLowerCase()];
-      if (
-        !mime ||
-        (kind === 'image' &&
-          !contract.supportsImage(extname(path).toLowerCase()))
-      )
+            : contract.supportsImage(extname(path).toLowerCase());
+      if (!supported)
         throw new Error(`Unsupported upload file extension: ${path}`);
       const metadata = await stat(path);
       if (!metadata.isFile())
@@ -182,7 +155,7 @@ async function uploadFiles(
       if (!body.length) throw new Error(`File is empty: ${path}`);
       return {
         body,
-        file: contract.declaration(basename(path), mime, body.length),
+        file: contract.declaration(basename(path), body.length),
       };
     }),
   );
@@ -216,11 +189,7 @@ async function uploadFiles(
         !upload.headers ||
         typeof upload.headers !== 'object' ||
         Array.isArray(upload.headers) ||
-        Object.values(upload.headers).some(
-          (value) => typeof value !== 'string',
-        ) ||
-        (contract.requiresContentType &&
-          typeof upload.headers['Content-Type'] !== 'string')
+        Object.values(upload.headers).some((value) => typeof value !== 'string')
       )
         throw new Error('Server returned an invalid upload');
     }
@@ -306,11 +275,6 @@ export async function rigging(
       throw new Error(
         'Provide exactly one generation ID, --model or --model-upload-id',
       );
-    if (
-      (options.model || options.modelUploadId) &&
-      context.schemaVersion !== 'canary'
-    )
-      throw new Error('Uploaded models require --canary-schema');
     const paths = options.animation ?? [];
     const presets = options.animationPreset ?? [];
     if (paths.length && presets.length)
@@ -340,7 +304,7 @@ export async function rigging(
       // Validate model-source parameters before allocating its upload.
       validateOperation(context, 'rodin_generate_rigging', {
         ...input,
-        model_upload_id: uploadContract(context.schemaVersion).placeholderId(),
+        model_upload_id: uploadContract.placeholderId(),
       });
       await uploadFiles(
         [options.model],
@@ -378,11 +342,7 @@ export async function listUploads(
   options: { kind?: string; tag?: string; page?: number },
   context?: ToolContext,
 ) {
-  if (context && context.schemaVersion !== 'canary')
-    throw new Error('list_upload requires --canary-schema');
   return withToolContext(async (context) => {
-    if (context.schemaVersion !== 'canary')
-      throw new Error('list_upload requires --canary-schema');
     return rodinListUploads(context, omitUndefined(options));
   }, context);
 }

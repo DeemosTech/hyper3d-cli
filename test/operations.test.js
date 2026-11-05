@@ -67,7 +67,9 @@ test('generate uploads ordered images, then generates once; failures never gener
         return {
           structuredContent: {
             uploads: paths.map((_, i) => ({
-              upload_id: i ? 'a1bb98f2-48be-4be1-9818-d49de002497a' : id,
+              upload_id: i
+                ? 'BbCdEfGhIjKlMnOpQrStUA'
+                : 'AbCdEfGhIjKlMnOpQrStUA',
               upload_url: `https://upload.example/${i}`,
               method: 'PUT',
               headers: { 'Content-Type': 'image/png' },
@@ -97,8 +99,8 @@ test('generate uploads ordered images, then generates once; failures never gener
   assert.deepEqual([...events[1].options.body], [1]);
   assert.equal(events[1].options.headers.Authorization, undefined);
   assert.deepEqual(events[3].arguments.reference_upload_ids, [
-    id,
-    'a1bb98f2-48be-4be1-9818-d49de002497a',
+    'AbCdEfGhIjKlMnOpQrStUA',
+    'BbCdEfGhIjKlMnOpQrStUA',
   ]);
   events.length = 0;
   failUpload = true;

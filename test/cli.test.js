@@ -155,7 +155,6 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       assert.equal((await run([command, '--help'])).code, 0);
     }
     const listed = await run([
-      '--canary-schema',
       'list_upload',
       '--kind',
       'model',
@@ -170,10 +169,9 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       total: 0,
       filters: { kind: 'model', page: 2 },
     });
-    const beforeRejectedList = requests.length;
-    const rejectedList = await run(['list_upload']);
-    assert.equal(rejectedList.code, 1);
-    assert.equal(requests.length, beforeRejectedList);
+    const defaultList = await run(['list_upload', '--output', 'json']);
+    assert.equal(defaultList.code, 0, defaultList.stderr);
+    assert.deepEqual(JSON.parse(defaultList.stdout).filters, { page: 1 });
     const rigged = await run([
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',

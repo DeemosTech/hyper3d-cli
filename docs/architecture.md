@@ -144,45 +144,26 @@ the live server schema.
 
 ## Tool schema
 
-`src/base_schema.json` is the default reference contract. The optional
-`src/canary_schema.json` contains the upcoming MCP contract (10 tools).
-Neither snapshot establishes whether a particular endpoint supports it.
+`src/base_schema.json` contains the supported MCP reference contract (10 tools).
+Requests must pass the live server schema; differences from the bundled input
+schema warn, retaining forward compatibility for server enum additions. The MCP
+SDK validates live output schemas.
 
-The global `--canary-schema` flag explicitly selects the canary contract and its
-upload implementation. Without it, the CLI uses the default contract. There is no
-automatic negotiation or fallback. A workflow captures the selection in its
-`ToolContext`; its uploads and tool calls share that selection. A build without
-the optional snapshot rejects `--canary-schema` before connecting.
-
-`upload-contract.ts` binds the two upload behaviors: default declares MIME types,
-uses UUID placeholders and requires a Content-Type response header; canary omits
-MIME declarations, uses Base64URL placeholders, accepts empty headers, and allows
-25 MiB images and 128 MiB models. Both send exactly the returned upload headers.
-The selected schema controls which tools the implementation can call. Requests
-must also pass the live server schema; differences from the selected reference
-input schema warn, retaining forward compatibility for server enum additions.
-The MCP SDK validates live output schemas; upload workflows check the fields
-required by the selected implementation. The flag does not change the endpoint;
-use `--base-url` to select a backend supporting that contract.
-
-```sh
-hyper3d --canary-schema list_upload --kind model --tag prop --page 1
-hyper3d --canary-schema generate --image ./reference.png
-hyper3d --canary-schema rigging --model ./character.glb --bone-template human
-hyper3d --canary-schema rigging --model-upload-id <upload-id> --bone-template human
-```
+`upload-contract.ts` defines the upload behavior: omit MIME declarations, use
+Base64URL upload IDs, accept empty headers, and allow 25 MiB images and animations
+and 128 MiB models. Uploads send exactly the returned headers. Generation IDs
+remain UUIDs.
 
 `list_upload` calls `rodin_list_uploads` and returns `{ files, total }`. Only saved
 library files are listed, newest first, 50 per page; transient MCP uploads are not
 listed. Each file contains `upload_id`, `kind`, nullable `format`, `name`, `tags`,
-and `created_at`. The command requires canary mode. Rigging accepts exactly one
-existing generation ID, local `--model`, or saved `--model-upload-id`; uploaded
-model sources require canary mode. Generation IDs remain UUIDs in both modes.
+and `created_at`. Rigging accepts exactly one existing generation ID, local
+`--model`, or saved `--model-upload-id`.
 
-When the new backend contract becomes the supported default, promote the canary
-snapshot and upload behavior together, update tests, and remove the old behavior.
-A subsequent canary snapshot is optional. Do not change a snapshot without its
-matching implementation and workflow tests.
+The previous canary contract and implementation are now the sole default.
+`--canary-schema` remains recognized and unconditionally prints
+`No canary schema is in progress`, then exits successfully before command parsing,
+endpoint configuration, update checks, or backend connections.
 
 The base snapshot does not establish whether a CLI release is outdated; npm
 version checks determine whether an update is available.

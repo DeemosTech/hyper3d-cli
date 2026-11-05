@@ -11,7 +11,6 @@ import {
   configureEndpoints,
   endpoints,
 } from './endpoints.js';
-import { configureSchema } from './mcp.js';
 import {
   generate,
   listUploads,
@@ -29,6 +28,11 @@ import { getConfigDir } from './utils.js';
 
 import type { Payload } from './types.js';
 
+if (process.argv.slice(2).includes('--canary-schema')) {
+  process.stdout.write('No canary schema is in progress\n');
+  process.exit(0);
+}
+
 const pkg = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 );
@@ -40,10 +44,7 @@ const print = (value: Payload, kind?: string) => {
 };
 
 const cli = new Command('hyper3d').version(pkg.version);
-cli.option(
-  '--canary-schema',
-  'Use the bundled canary MCP contract and implementation',
-);
+cli.option('--canary-schema', 'Show whether a canary schema is in progress');
 cli.option(
   '--base-url <url>',
   'Hyper3D API base URL (overrides BASE_URL)',
@@ -57,7 +58,6 @@ cli.addOption(
 
 cli.hook('preAction', () => {
   configureEndpoints(cli.opts().baseUrl);
-  configureSchema(cli.opts().canarySchema ? 'canary' : 'default');
 });
 
 cli.hook('preAction', async (_root, command) => {
@@ -184,11 +184,8 @@ cli
 
 cli
   .command('rigging [generation-id]')
-  .option('--model <path>', 'Upload a local model (requires --canary-schema)')
-  .option(
-    '--model-upload-id <id>',
-    'Use a saved model upload (requires --canary-schema)',
-  )
+  .option('--model <path>', 'Upload a local model')
+  .option('--model-upload-id <id>', 'Use a saved model upload')
   .description(
     'Rig a model with confirmed geometry, optionally adding animations',
   )
@@ -215,13 +212,11 @@ cli
 
 cli
   .command('list_upload')
-  .description('List saved library uploads (requires --canary-schema)')
+  .description('List saved library uploads')
   .option('--kind <kind>', 'image, model or animation')
   .option('--tag <tag>', 'Exact tag')
   .option('--page <number>', 'Page number, 50 files per page', Number, 1)
   .action(async (options) => {
-    if (!cli.opts().canarySchema)
-      throw new Error('list_upload requires --canary-schema');
     print(await listUploads(options));
   });
 
