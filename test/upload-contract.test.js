@@ -1,15 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, copyFile, truncate } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, truncate } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import {
-  baseSchema,
-  canarySchema,
-  prepareCall,
-} from '../packages/cli/dist/schema.js';
+import { baseSchema } from '../packages/cli/dist/schema.js';
 import {
   generate,
   agentic,
@@ -20,8 +15,8 @@ import {
 const fileId = 'AbCdEfGhIjKlMnOpQrStUA';
 const generationId = 'd1bb98f2-48be-4be1-9818-d49de002497a';
 
-test('canary uploads use new IDs, omit MIME and accept empty headers across workflows', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'hyper3d-canary-'));
+test('default uploads use new IDs, omit MIME and accept empty headers across workflows', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'hyper3d-upload-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const image = join(dir, 'cat.png');
   const model = join(dir, 'cat.glb');
@@ -35,8 +30,7 @@ test('canary uploads use new IDs, omit MIME and accept empty headers across work
     return new Response('', { status: 200 });
   });
   const context = {
-    schemaVersion: 'canary',
-    remoteTools: canarySchema.tools,
+    remoteTools: baseSchema.tools,
     client: {
       async callTool(request) {
         events.push(request);
@@ -81,39 +75,6 @@ test('canary uploads use new IDs, omit MIME and accept empty headers across work
   assert.equal(events[2].arguments.model_upload_id, fileId);
 });
 
-test('selected contract does not follow remote schema automatically', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'hyper3d-default-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const image = join(dir, 'cat.png');
-  await writeFile(image, 'bytes');
-  let calls = 0;
-  const context = {
-    remoteTools: canarySchema.tools,
-    client: {
-      async callTool() {
-        calls++;
-      },
-    },
-  };
-  await assert.rejects(
-    generate({ image: [image] }, context),
-    /Invalid tool input/,
-  );
-  await assert.rejects(listUploads({}, context), /requires? --canary-schema/);
-  await assert.rejects(
-    rigging(undefined, { boneTemplate: 'human', model: image }, context),
-    /requires? --canary-schema/,
-  );
-  assert.equal(calls, 0);
-  const tool = canarySchema.tools.find(
-    (tool) => tool.name === 'rodin_list_uploads',
-  );
-  assert.throws(() => prepareCall(tool.name, {}, tool), /Unsupported tool/);
-  assert.doesNotThrow(() =>
-    prepareCall(tool.name, {}, tool, undefined, 'canary'),
-  );
-});
-
 test('list_upload maps filters and preserves the backend file response', async () => {
   const payload = {
     files: [
@@ -130,8 +91,7 @@ test('list_upload maps filters and preserves the backend file response', async (
   };
   let request;
   const context = {
-    schemaVersion: 'canary',
-    remoteTools: canarySchema.tools,
+    remoteTools: baseSchema.tools,
     client: {
       async callTool(value) {
         request = value;
@@ -149,54 +109,48 @@ test('list_upload maps filters and preserves the backend file response', async (
   });
   await assert.rejects(listUploads({ page: 0 }, context), /Invalid tool input/);
   await assert.rejects(
-    listUploads({}, { ...context, remoteTools: baseSchema.tools }),
+    listUploads(
+      {},
+      {
+        ...context,
+        remoteTools: baseSchema.tools.filter(
+          (tool) => tool.name !== 'rodin_list_uploads',
+        ),
+      },
+    ),
     /Tool unavailable/,
   );
 });
 
-test('global canary switch is discoverable and list_upload is gated before connecting', () => {
-  const command = ['packages/cli/dist/index.js'];
-  const help = spawnSync(
-    process.execPath,
-    [...command, '--canary-schema', 'list_upload', '--help'],
-    { encoding: 'utf8' },
-  );
-  assert.equal(help.status, 0);
-  assert.match(help.stdout, /--kind/);
-  const rejected = spawnSync(process.execPath, [...command, 'list_upload'], {
-    encoding: 'utf8',
-  });
-  assert.equal(rejected.status, 1);
-  assert.match(rejected.stderr, /requires? --canary-schema/);
+test('canary switch always reports no active schema without connecting', () => {
+  for (const args of [
+    ['--canary-schema'],
+    ['--canary-schema', 'generate'],
+    ['rigging', '--canary-schema'],
+    ['--base-url', 'invalid', '--canary-schema', 'list_upload'],
+    ['--canary-schema', '--help'],
+    ['--version', '--canary-schema'],
+    ['unknown', '--canary-schema', '--unknown-option'],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      ['packages/cli/dist/index.js', ...args],
+      {
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'No canary schema is in progress\n');
+    assert.equal(result.stderr, '');
+  }
 });
 
-test('default schema loads without the optional canary snapshot', async (t) => {
-  const dir = await mkdtemp(join(resolve('packages/cli'), 'schema-test-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  await Promise.all(
-    ['schema.js', 'base_schema.json'].map((name) =>
-      copyFile(join('packages/cli/dist', name), join(dir, name)),
-    ),
-  );
-  const script = `import { schemaFor } from ${JSON.stringify(pathToFileURL(join(dir, 'schema.js')).href)};
-    if (!schemaFor().tools.length) process.exit(2);
-    try { schemaFor('canary'); process.exit(3); } catch (error) {
-      if (!error.message.includes('does not include a canary schema')) throw error;
-    }`;
-  const result = spawnSync(
-    process.execPath,
-    ['--input-type=module', '-e', script],
-    { encoding: 'utf8' },
-  );
-  assert.equal(result.status, 0, result.stderr);
-});
-
-test('canary accepts images over 20 MiB while default stops before allocation', async (t) => {
+test('default accepts images up to 25 MiB and rejects larger files before allocation', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'hyper3d-size-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const image = join(dir, 'large.png');
   await writeFile(image, '');
-  await truncate(image, 21 * 1024 ** 2);
+  await truncate(image, 25 * 1024 ** 2);
   let calls = 0;
   const client = {
     async callTool() {
@@ -206,15 +160,13 @@ test('canary accepts images over 20 MiB while default stops before allocation', 
   };
   await assert.rejects(
     generate({ image: [image] }, { client, remoteTools: baseSchema.tools }),
-    /size limit/,
-  );
-  assert.equal(calls, 0);
-  await assert.rejects(
-    generate(
-      { image: [image] },
-      { client, remoteTools: canarySchema.tools, schemaVersion: 'canary' },
-    ),
     /allocation reached/,
+  );
+  assert.equal(calls, 1);
+  await truncate(image, 25 * 1024 ** 2 + 1);
+  await assert.rejects(
+    generate({ image: [image] }, { client, remoteTools: baseSchema.tools }),
+    /size limit/,
   );
   assert.equal(calls, 1);
 });

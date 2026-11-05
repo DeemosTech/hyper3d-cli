@@ -74,7 +74,7 @@ hyper3d rigging <generation-id> --bone-template human --animation ./motion.fbx
 hyper3d rigging <generation-id> --bone-template custom --skeleton-description "four arms and two legs"
 ```
 
-Agentic requires 1–5 images (20 MiB each). Its optional prompt is derived from
+Agentic requires 1–5 images (25 MiB each). Its optional prompt is derived from
 images when omitted or blank. Budget tiers are `basic`, `standard`, and `pro`;
 export formats are `glb`, `usdz`, `fbx`, and `stl`. The result includes the chosen
 `high-poly` or `n-gons` producer.
@@ -256,18 +256,18 @@ For development and releases, see [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [release guide](docs/releasing.md). Report problems in
 [GitHub Issues](https://github.com/DeemosTech/hyper3d-cli/issues).
 
-## Canary backend schema
-
-Use `--canary-schema` to select the bundled upcoming MCP contract and its matching
-upload behavior. The default contract remains unchanged. This flag does not
-switch servers; use `--base-url` when testing a separate backend.
-
-```sh
-hyper3d --canary-schema list_upload --kind model
-hyper3d --canary-schema generate --image ./reference.png
-hyper3d --canary-schema rigging --model ./character.glb --bone-template human
-```
+## Library uploads
 
 `list_upload` lists saved library files, not transient uploads. It accepts
 `--kind`, `--tag`, and `--page` and returns `files` and `total`. A saved model's
-`upload_id` can be passed to `rigging --model-upload-id <id>` in canary mode.
+`upload_id` can be passed to `rigging --model-upload-id <id>`.
+
+```sh
+hyper3d list_upload --kind model
+hyper3d generate --image ./reference.png
+hyper3d rigging --model ./character.glb --bone-template human
+```
+
+The previously bundled canary schema is now the default. `--canary-schema` is
+retained and always prints `No canary schema is in progress`, then exits without
+running a command or connecting to the backend.

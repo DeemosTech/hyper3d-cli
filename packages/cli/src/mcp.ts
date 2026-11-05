@@ -5,9 +5,8 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 
 import { loadCredentials, createProvider } from './auth.js';
 import { endpoints, secureUrl } from './endpoints.js';
-import { prepareCall, schemaFor } from './schema.js';
+import { prepareCall } from './schema.js';
 
-import type { SchemaVersion } from './schema.js';
 import type { Payload, ToolClient } from './types.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
@@ -56,14 +55,7 @@ export async function listTools(client: Client) {
   return tools;
 }
 
-let selectedSchema: SchemaVersion = 'default';
-export function configureSchema(version: SchemaVersion) {
-  schemaFor(version);
-  selectedSchema = version;
-}
-
 export interface ToolContext {
-  schemaVersion?: SchemaVersion;
   client: ToolClient;
   remoteTools: Tool[];
 }
@@ -74,12 +66,10 @@ export async function withToolContext<T>(
   context?: ToolContext,
 ): Promise<T> {
   if (context) return action(context);
-  const schemaVersion = selectedSchema;
   return withClient({ endpoint: endpoints.mcp, version }, async (client) =>
     action({
       client,
       remoteTools: await listTools(client),
-      schemaVersion,
     }),
   );
 }
@@ -127,8 +117,6 @@ async function call(context: ToolContext, name: string, input: Payload) {
       name,
       input,
       context.remoteTools.find((tool) => tool.name === name),
-      undefined,
-      context.schemaVersion,
     );
     // Submit once; a failed or timed-out call may already have created a task.
     const response = await context.client.callTool(request, undefined, {
@@ -156,7 +144,6 @@ export function validateGenerate(context: ToolContext, input: GenerateInput) {
     input,
     context.remoteTools.find((tool) => tool.name === 'rodin_generate'),
     () => {},
-    context.schemaVersion,
   );
 }
 
@@ -164,7 +151,7 @@ export async function rodinCreateUploads(
   context: ToolContext,
   input: {
     kind?: 'image' | 'animation' | 'model';
-    files: { filename: string; mime_type?: string; size_bytes: number }[];
+    files: { filename: string; size_bytes: number }[];
   },
 ) {
   return call(context, 'rodin_create_uploads', input);
@@ -225,7 +212,6 @@ export function validateOperation(
     input,
     context.remoteTools.find((tool) => tool.name === name),
     () => {},
-    context.schemaVersion,
   );
 }
 
