@@ -13,6 +13,7 @@ import {
 } from './endpoints.js';
 import {
   generate,
+  listUploads,
   status,
   result,
   poll,
@@ -27,6 +28,11 @@ import { getConfigDir } from './utils.js';
 
 import type { Payload } from './types.js';
 
+if (process.argv.slice(2).includes('--canary-schema')) {
+  process.stdout.write('No canary schema is in progress\n');
+  process.exit(0);
+}
+
 const pkg = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 );
@@ -38,6 +44,7 @@ const print = (value: Payload, kind?: string) => {
 };
 
 const cli = new Command('hyper3d').version(pkg.version);
+cli.option('--canary-schema', 'Show whether a canary schema is in progress');
 cli.option(
   '--base-url <url>',
   'Hyper3D API base URL (overrides BASE_URL)',
@@ -176,7 +183,9 @@ cli
   .action(async (options) => print(await animationPresets(options.category)));
 
 cli
-  .command('rigging <generation-id>')
+  .command('rigging [generation-id]')
+  .option('--model <path>', 'Upload a local model')
+  .option('--model-upload-id <id>', 'Use a saved model upload')
   .description(
     'Rig a model with confirmed geometry, optionally adding animations',
   )
@@ -200,6 +209,16 @@ cli
     [],
   )
   .action(async (id, options) => print(await rigging(id, options)));
+
+cli
+  .command('list_upload')
+  .description('List saved library uploads')
+  .option('--kind <kind>', 'image, model or animation')
+  .option('--tag <tag>', 'Exact tag')
+  .option('--page <number>', 'Page number, 50 files per page', Number, 1)
+  .action(async (options) => {
+    print(await listUploads(options));
+  });
 
 // poll
 for (const [command, action] of [

@@ -28,7 +28,7 @@ for (const mode of ['agentic', 'rigging']) {
       events.push({ url, options });
       return new Response('', { status: uploadStatus });
     });
-    const ids = [id, 'a1bb98f2-48be-4be1-9818-d49de002497a'];
+    const ids = ['AbCdEfGhIjKlMnOpQrStUA', 'BbCdEfGhIjKlMnOpQrStUA'];
     const context = {
       remoteTools: baseSchema.tools,
       client: {

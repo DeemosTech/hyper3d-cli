@@ -79,6 +79,24 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
         }),
       );
     }
+    mcp.registerTool(
+      'rodin_list_uploads',
+      {
+        inputSchema: {
+          kind: z.string().optional(),
+          tag: z.string().optional(),
+          page: z.number().optional(),
+        },
+      },
+      async (input) => ({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ files: [], total: 0, filters: input }),
+          },
+        ],
+      }),
+    );
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -136,6 +154,24 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       assert.match(help.stdout, new RegExp(command));
       assert.equal((await run([command, '--help'])).code, 0);
     }
+    const listed = await run([
+      'list_upload',
+      '--kind',
+      'model',
+      '--page',
+      '2',
+      '--output',
+      'json',
+    ]);
+    assert.equal(listed.code, 0, listed.stderr);
+    assert.deepEqual(JSON.parse(listed.stdout), {
+      files: [],
+      total: 0,
+      filters: { kind: 'model', page: 2 },
+    });
+    const defaultList = await run(['list_upload', '--output', 'json']);
+    assert.equal(defaultList.code, 0, defaultList.stderr);
+    assert.deepEqual(JSON.parse(defaultList.stdout).filters, { page: 1 });
     const rigged = await run([
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',

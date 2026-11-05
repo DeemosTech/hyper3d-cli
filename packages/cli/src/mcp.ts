@@ -67,7 +67,10 @@ export async function withToolContext<T>(
 ): Promise<T> {
   if (context) return action(context);
   return withClient({ endpoint: endpoints.mcp, version }, async (client) =>
-    action({ client, remoteTools: await listTools(client) }),
+    action({
+      client,
+      remoteTools: await listTools(client),
+    }),
   );
 }
 
@@ -147,8 +150,8 @@ export function validateGenerate(context: ToolContext, input: GenerateInput) {
 export async function rodinCreateUploads(
   context: ToolContext,
   input: {
-    kind?: 'image' | 'animation';
-    files: { filename: string; mime_type: string; size_bytes: number }[];
+    kind?: 'image' | 'animation' | 'model';
+    files: { filename: string; size_bytes: number }[];
   },
 ) {
   return call(context, 'rodin_create_uploads', input);
@@ -231,4 +234,8 @@ export async function rodinListAnimationPresets(
   input: { category?: string },
 ) {
   return call(context, 'rodin_list_animation_presets', input);
+}
+
+export async function rodinListUploads(context: ToolContext, input: Payload) {
+  return call(context, 'rodin_list_uploads', input);
 }

@@ -39,7 +39,7 @@ export function prepareCall(
     validateInput(tool.inputSchema, input);
   } catch {
     warn(
-      `${name}: input differs from bundled base schema but is accepted by the server`,
+      `${name}: input differs from bundled schema but is accepted by the server`,
     );
   }
   return { name, arguments: input };

@@ -1,13 +1,191 @@
 {
-  "source": "https://github.com/DeemosTech/hyper3d-backend/pull/712",
   "tools": [
     {
-      "name": "rodin_create_uploads",
-      "title": "Create Rodin image or animation uploads",
-      "description": "Create one-hour presigned PUT URLs for one batch of reference images or FBX animations. kind defaults to image: 1-5 images, at most 20 MiB each, for rodin_generate.reference_upload_ids or rodin_generate_agentic.reference_upload_ids. Use kind=animation for 1-10 FBX files, at most 25 MiB each, for rodin_generate_rigging.animation_upload_ids. Each FBX must contain exactly one animation clip (Take). Upload each file successfully before passing its ID to generation. If you cannot complete the HTTP PUT uploads, explain the limitation to the user in their language and suggest continuing at https://hyper3d.ai. In ChatGPT Chat mode, also suggest trying Work mode.",
+      "name": "rodin_list_animation_presets",
+      "title": "List Rodin rigging animation presets",
+      "description": "Discover built-in Rodin rigging animations. Without category, returns only categories. With category, returns only animations containing the preset IDs for that category. Use the exact returned IDs when selecting presets. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the preset catalog only and does not generate or modify models or consume credits.",
       "inputSchema": {
         "type": "object",
         "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "Bird",
+              "Canine",
+              "Fish",
+              "HeavyHooved",
+              "Human",
+              "LeanHooved",
+              "Lizard",
+              "Rodentia",
+              "human_sp",
+              "seaturtle"
+            ],
+            "description": "Select a category to list its animation IDs. Omit to list categories only."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "Bird",
+                "Canine",
+                "Fish",
+                "HeavyHooved",
+                "Human",
+                "LeanHooved",
+                "Lizard",
+                "Rodentia",
+                "human_sp",
+                "seaturtle"
+              ]
+            },
+            "description": "Returned only when category is omitted."
+          },
+          "animations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Returned only when category is supplied."
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:read"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rodin_list_uploads",
+      "title": "List saved Rodin library files",
+      "description": "List files the user saved in their Hyper3D library, newest first. Pass returned upload_id values instead of uploading the same files again: kind=animation to rodin_generate_rigging.animation_upload_ids, kind=model to rodin_generate_rigging.model_upload_id, kind=image to reference_upload_ids. Reads the library only and does not consume credits.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["image", "model", "animation"],
+            "description": "Only files of this kind."
+          },
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Only files carrying this exact tag."
+          },
+          "page": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "default": 1
+          }
+        },
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "upload_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": ["string", "null"]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "upload_id",
+                "kind",
+                "format",
+                "name",
+                "tags",
+                "created_at"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": ["files", "total"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:read"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rodin_create_uploads",
+      "title": "Create Rodin file uploads",
+      "description": "Create one-hour presigned PUT URLs for one batch of files of the same kind. kind defaults to image: 1-5 images (JPEG, PNG, WebP, GIF, TIFF, AVIF or HEIC), at most 25 MiB each, for rodin_generate.reference_upload_ids or rodin_generate_agentic.reference_upload_ids. kind=model: one mesh (GLB, OBJ, STL, FBX or USD), at most 128 MiB, for rodin_generate_rigging.model_upload_id. kind=animation: 1-10 FBX files, at most 25 MiB each, for rodin_generate_rigging.animation_upload_ids; each FBX must contain exactly one animation clip (Take). PUT exactly size_bytes bytes with the returned headers before passing an ID to generation. The format is detected from the uploaded bytes. An uploaded ID can be reused by later generations until it expires, so do not upload the same file twice. If you cannot complete the HTTP PUT uploads, explain the limitation to the user in their language and suggest continuing at https://hyper3d.ai. In ChatGPT Chat mode, also suggest trying Work mode.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["image", "model", "animation"],
+            "description": "Kind of every file in the batch. Defaults to image."
+          },
           "files": {
             "type": "array",
             "items": {
@@ -16,28 +194,22 @@
                 "filename": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 128
-                },
-                "mime_type": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 128
+                  "maxLength": 128,
+                  "description": "Filename without a directory path. OBJ, STL and USDZ meshes need their extension."
                 },
                 "size_bytes": {
                   "type": "integer",
                   "exclusiveMinimum": 0,
-                  "maximum": 26214400
+                  "maximum": 134217728,
+                  "description": "Exact file size in bytes, within the limit of its kind."
                 }
               },
-              "required": ["filename", "mime_type", "size_bytes"],
+              "required": ["filename", "size_bytes"],
               "additionalProperties": false
             },
             "minItems": 1,
-            "maxItems": 10
-          },
-          "kind": {
-            "type": "string",
-            "enum": ["image", "animation"]
+            "maxItems": 10,
+            "description": "One batch of the selected kind: 1-5 images, 1 model or 1-10 animations."
           }
         },
         "required": ["files"],
@@ -53,8 +225,7 @@
               "type": "object",
               "properties": {
                 "upload_id": {
-                  "type": "string",
-                  "format": "uuid"
+                  "type": "string"
                 },
                 "upload_url": {
                   "type": "string",
@@ -66,13 +237,9 @@
                 },
                 "headers": {
                   "type": "object",
-                  "properties": {
-                    "Content-Type": {
-                      "type": "string"
-                    }
-                  },
-                  "required": ["Content-Type"],
-                  "additionalProperties": false
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 },
                 "expires_at": {
                   "type": "string",
@@ -129,7 +296,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "format": "uuid"
+              "pattern": "^[A-Za-z0-9_-]{21}[AEIMQUYcgkosw048]$"
             },
             "minItems": 1,
             "maxItems": 5,
@@ -204,6 +371,193 @@
       }
     },
     {
+      "name": "rodin_generate_agentic",
+      "title": "Generate a 3D model with Agentic mode",
+      "description": "Prefer this tool for subjects whose defining shapes, proportions, and negative spaces can be expressed with editable n-gons and procedural construction using primitives, extrusions, profiles, sweeps, repetition, or booleans, such as simple furniture, geometric props, and robots made of separate housings and uniform links. Judge the geometry rather than the category: hard-surface objects are not always easy, and organic objects are not always unsuitable. Detailed figurative sculpting, fitted anatomical shells, tension-shaped soft assemblies, garments, and realistic car bodies are generally better suited to rodin_generate. Accepts ordinary single-subject images as well as multi-view collages and design concept sheets; these layouts alone do not guarantee suitability. Agentic mode is beta: reference fidelity and structural results may fall short of expectations. Explain these limitations to the user before submitting. Automatically choose the Rodin high-poly or Agentic n-gons pipeline from 1-5 reference images and export the final model. First upload images with rodin_create_uploads and HTTP PUT, then pass their IDs. An omitted or blank prompt is derived from the images. This consumes credits. Use rodin_get_status or rodin_wait to track completion, then rodin_get_result for downloads. If status is unknown, stop waiting and check rodin_get_result; do not resubmit automatically. Present display_url only after completion. If submission times out, do not retry automatically; ask the user to check Hyper3D Mine.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "reference_upload_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{21}[AEIMQUYcgkosw048]$"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "prompt": {
+            "type": "string",
+            "maxLength": 1024,
+            "default": ""
+          },
+          "tier": {
+            "type": "string",
+            "enum": ["basic", "standard", "pro"],
+            "default": "standard"
+          },
+          "export_type": {
+            "type": "string",
+            "enum": ["glb", "usdz", "fbx", "stl"],
+            "default": "glb"
+          }
+        },
+        "required": ["reference_upload_ids"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "generation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          },
+          "display_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "producer": {
+            "type": "string",
+            "enum": ["high-poly", "n-gons"]
+          }
+        },
+        "required": ["generation_id", "status", "display_url", "producer"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:generate"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rodin_generate_rigging",
+      "title": "Rig and animate a Rodin model",
+      "description": "Generate a skeleton and skinning for an existing Rodin model, optionally adding stock or uploaded FBX animations. Reuses confirmed geometry and textures. Exports Basic (2K) textures with All materials when confirmed textures exist, otherwise no materials. This consumes credits and creates a new generation_id. Use rodin_get_status or rodin_wait, then rodin_get_result for downloads. Present display_url only after completion. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The generation_id of your Rodin model with confirmed geometry. A new rigging task is created; the source is preserved. Provide exactly one of asset_id or model_upload_id."
+          },
+          "model_upload_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{21}[AEIMQUYcgkosw048]$",
+            "description": "A mesh uploaded with rodin_create_uploads kind=model (GLB, OBJ, STL, FBX or USD), rigged instead of an existing generation. Provide exactly one of asset_id or model_upload_id."
+          },
+          "bone_template": {
+            "type": "string",
+            "enum": [
+              "human",
+              "quadruped",
+              "human_UE",
+              "human_Unity",
+              "human_ActorCore",
+              "bird",
+              "dragon",
+              "kaiju",
+              "custom"
+            ],
+            "description": "Skeleton template. Use human_UE, human_Unity, or human_ActorCore for the corresponding human skeleton variant. Names are case-sensitive. custom requires skeleton_description; preset templates do not accept it."
+          },
+          "skeleton_description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Body structure and limbs for a custom skeleton. Required only for bone_template=custom; omit for preset templates."
+          },
+          "skinning_method": {
+            "type": "string",
+            "enum": ["shell", "core"],
+            "default": "shell",
+            "description": "Skinning method. Defaults to shell."
+          },
+          "geometry_file_format": {
+            "type": "string",
+            "enum": ["glb", "fbx", "usdz"],
+            "default": "glb",
+            "description": "Output format for the rigged model. Defaults to glb."
+          },
+          "animation_preset": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxItems": 10,
+            "description": "Distinct Standard Animation IDs from rodin_list_animation_presets compatible with the skeleton. Legacy preset IDs remain accepted and are normalized to the corresponding Standard Animation. Up to 10 presets; mutually exclusive with animation_upload_ids. Omit both to export without animations."
+          },
+          "animation_upload_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/properties/model_upload_id"
+            },
+            "maxItems": 10,
+            "description": "Distinct FBX upload IDs from rodin_create_uploads with kind=animation after successful PUT uploads, or saved animations from rodin_list_uploads. Each file must contain one animation clip (Take) and already match the target rig; uploaded animations are not retargeted. Up to 10 files; mutually exclusive with animation_preset."
+          }
+        },
+        "required": ["bone_template"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "generation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          },
+          "display_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": ["generation_id", "status", "display_url"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:generate"]
+          }
+        ]
+      }
+    },
+    {
       "name": "rodin_generate_bang",
       "title": "Generate BANG from a Rodin generation",
       "description": "Split a completed Rodin generation into parts with BANG. Pass the generation_id returned by rodin_generate as asset_id. This consumes credits. The response includes display_url; present that URL only after the BANG generation completes. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine.",
@@ -217,7 +571,7 @@
           },
           "instruction": {
             "type": "string",
-            "description": "Optional part-split instruction naming the parts to separate, applied to the source generation image. Omit unless the user describes which parts they want; omitting it uses the automatic split planner."
+            "description": "Optional comma-separated list of part names to separate. Provide only part names, for example: \"head, torso, left arm, right arm, legs\". Omit unless the user specifies which parts they want; omitting it uses the automatic split planner."
           },
           "strength": {
             "type": "integer",
@@ -512,116 +866,6 @@
           }
         ]
       }
-    },
-    {
-      "name": "rodin_generate_agentic",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "reference_upload_ids": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "minItems": 1,
-            "maxItems": 5
-          },
-          "prompt": {
-            "type": "string",
-            "maxLength": 1024
-          },
-          "tier": {
-            "type": "string",
-            "enum": ["basic", "standard", "pro"]
-          },
-          "export_type": {
-            "type": "string",
-            "enum": ["glb", "usdz", "fbx", "stl"]
-          }
-        },
-        "required": ["reference_upload_ids"],
-        "additionalProperties": false
-      },
-      "title": "Generate a 3D model with Agentic mode",
-      "description": "Prefer this tool for subjects whose defining shapes, proportions, and negative spaces can be expressed with editable n-gons and procedural construction using primitives, extrusions, profiles, sweeps, repetition, or booleans, such as simple furniture, geometric props, and robots made of separate housings and uniform links. Judge the geometry rather than the category: hard-surface objects are not always easy, and organic objects are not always unsuitable. Detailed figurative sculpting, fitted anatomical shells, tension-shaped soft assemblies, garments, and realistic car bodies are generally better suited to rodin_generate. Accepts ordinary single-subject images as well as multi-view collages and design concept sheets; these layouts alone do not guarantee suitability. Agentic mode is beta: reference fidelity and structural results may fall short of expectations. Explain these limitations to the user before submitting. Automatically choose the Rodin high-poly or Agentic n-gons pipeline from 1-5 reference images and export the final model. First upload images with rodin_create_uploads and HTTP PUT, then pass their IDs. An omitted or blank prompt is derived from the images. This consumes credits. Use rodin_get_status or rodin_wait to track completion, then rodin_get_result for downloads. If status is unknown, stop waiting and check rodin_get_result; do not resubmit automatically. Present display_url only after completion. If submission times out, do not retry automatically; ask the user to check Hyper3D Mine."
-    },
-    {
-      "name": "rodin_generate_rigging",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "asset_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "bone_template": {
-            "type": "string",
-            "enum": ["human", "quadruped", "ue", "unity", "actorcore", "custom"]
-          },
-          "skeleton_description": {
-            "type": "string",
-            "minLength": 1
-          },
-          "skinning_method": {
-            "type": "string",
-            "enum": ["shell", "core"]
-          },
-          "geometry_file_format": {
-            "type": "string",
-            "enum": ["glb", "fbx", "usdz"]
-          },
-          "animation_preset": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "minItems": 0,
-            "maxItems": 10
-          },
-          "animation_upload_ids": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "minItems": 0,
-            "maxItems": 10
-          }
-        },
-        "required": ["asset_id", "bone_template"],
-        "additionalProperties": false
-      },
-      "title": "Rig and animate a Rodin model",
-      "description": "Generate a skeleton and skinning for an existing Rodin model, optionally adding stock or uploaded FBX animations. Reuses confirmed geometry and textures. Exports Basic (2K) textures with All materials when confirmed textures exist, otherwise no materials. This consumes credits and creates a new generation_id. Use rodin_get_status or rodin_wait, then rodin_get_result for downloads. Present display_url only after completion. If this call times out, do not retry it automatically; ask the user to check Hyper3D Mine."
-    },
-    {
-      "name": "rodin_list_animation_presets",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "category": {
-            "type": "string",
-            "enum": [
-              "bird",
-              "canine",
-              "fish",
-              "heavy-hooved",
-              "human",
-              "lean-hooved",
-              "lizard",
-              "rodentia",
-              "sea-turtle"
-            ]
-          }
-        },
-        "required": [],
-        "additionalProperties": false
-      },
-      "title": "List Rodin rigging animation presets",
-      "description": "Discover built-in Rodin rigging animations. Without category, returns only categories. With category, returns only animations containing the preset IDs for that category. Use the exact returned IDs when selecting presets. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the preset catalog only and does not generate or modify models or consume credits."
     }
-  ],
-  "sourceRevision": "7d289b47be678179e613cd4a1f446071e3b7e04c"
+  ]
 }

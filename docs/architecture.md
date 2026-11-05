@@ -144,17 +144,27 @@ the live server schema.
 
 ## Tool schema
 
-`src/base_schema.json` is the bundled reference contract, updated against backend
-PR #712 at `7d289b47be678179e613cd4a1f446071e3b7e04c`. It contains 9 tools, including
-Agentic generation, rigging, animation uploads and preset discovery. This is a
-source contract, not evidence of production deployment. It operates without
-schema versions or implementation adapters. The CLI has one implementation of
-each operation.
+`src/base_schema.json` contains the supported MCP reference contract (10 tools).
+Requests must pass the live server schema; differences from the bundled input
+schema warn, retaining forward compatibility for server enum additions. The MCP
+SDK validates live output schemas.
 
-Actual requests are validated against the live server schema. Differences from
-the base input schema warn but do not reject input accepted by the server.
-New enum values pass through unchanged. The MCP SDK validates the server's
-output schema, and workflows validate the output fields they need to continue.
+`upload-contract.ts` defines the upload behavior: omit MIME declarations, use
+Base64URL upload IDs, accept empty headers, and allow 25 MiB images and animations
+and 128 MiB models. Uploads send exactly the returned headers. Generation IDs
+remain UUIDs.
+
+`list_upload` calls `rodin_list_uploads` and returns `{ files, total }`. Only saved
+library files are listed, newest first, 50 per page; transient MCP uploads are not
+listed. Each file contains `upload_id`, `kind`, nullable `format`, `name`, `tags`,
+and `created_at`. Rigging accepts exactly one existing generation ID, local
+`--model`, or saved `--model-upload-id`.
+
+The previous canary contract and implementation are now the sole default.
+`--canary-schema` remains recognized and unconditionally prints
+`No canary schema is in progress`, then exits successfully before command parsing,
+endpoint configuration, update checks, or backend connections.
+
 The base snapshot does not establish whether a CLI release is outdated; npm
 version checks determine whether an update is available.
 

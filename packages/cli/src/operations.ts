@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 
 import {
   rodinCreateUploads,
+  rodinListUploads,
   rodinGenerate,
   rodinGenerateBang,
   rodinGenerateAgentic,
@@ -16,28 +16,13 @@ import {
   validateGenerate,
   withToolContext,
 } from './mcp.js';
+import { uploadContract } from './upload-contract.js';
 import { omitUndefined } from './utils.js';
 
 import type { ToolContext } from './mcp.js';
 import type { Payload, GenerateOptions } from './types.js';
+import type { UploadKind } from './upload-contract.js';
 
-const mimeTypes: Record<string, string> = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.tif': 'image/tiff',
-  '.tiff': 'image/tiff',
-  '.gif': 'image/gif',
-  '.avif': 'image/avif',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-  '.bmp': 'image/bmp',
-  '.jp2': 'image/jp2',
-  '.jpx': 'image/jpx',
-  '.jpm': 'image/jpm',
-  '.mj2': 'image/mj2',
-};
 const defaultPollTimeoutSeconds = 30;
 // Leave ample headroom under the MCP client's 60-second per-request timeout.
 const maximumWaitCallSeconds = 30;
@@ -141,48 +126,54 @@ export async function bang(
 
 async function uploadFiles(
   paths: string[],
-  kind: 'image' | 'animation',
+  kind: UploadKind,
   input: Payload,
   idField: string,
   validate: (value: Payload) => void,
   context: ToolContext,
 ) {
+  const contract = uploadContract;
+  const maxBytes = contract.maxBytes[kind];
   const files = await Promise.all(
     paths.map(async (path) => {
-      const mime =
-        kind === 'animation'
-          ? extname(path).toLowerCase() === '.fbx'
-            ? 'application/octet-stream'
-            : undefined
-          : mimeTypes[extname(path).toLowerCase()];
-      if (!mime) throw new Error(`Unsupported upload file extension: ${path}`);
+      const supported =
+        kind === 'model'
+          ? /\.(glb|obj|stl|fbx|usd|usdz|usda|usdc)$/i.test(path)
+          : kind === 'animation'
+            ? extname(path).toLowerCase() === '.fbx'
+            : contract.supportsImage(extname(path).toLowerCase());
+      if (!supported)
+        throw new Error(`Unsupported upload file extension: ${path}`);
       const metadata = await stat(path);
       if (!metadata.isFile())
         throw new Error(`File is not a regular file: ${path}`);
-      if (metadata.size > (kind === 'animation' ? 25 : 20) * 1024 * 1024)
+      if (metadata.size > maxBytes)
         throw new Error('Upload file exceeds size limit');
       const body = await readFile(path);
-      if (body.length > (kind === 'animation' ? 25 : 20) * 1024 * 1024)
+      if (body.length > maxBytes)
         throw new Error('Upload file exceeds size limit');
       if (!body.length) throw new Error(`File is empty: ${path}`);
       return {
         body,
-        file: {
-          filename: basename(path),
-          mime_type: mime,
-          size_bytes: body.length,
-        },
+        file: contract.declaration(basename(path), body.length),
       };
     }),
   );
   // Validate generation options before creating uploads. IDs are assigned below.
   validate({
     ...input,
-    ...(files.length ? { [idField]: files.map(() => randomUUID()) } : {}),
+    ...(files.length
+      ? {
+          [idField]:
+            kind === 'model'
+              ? contract.placeholderId()
+              : files.map(() => contract.placeholderId()),
+        }
+      : {}),
   });
   if (files.length) {
     const { uploads } = await rodinCreateUploads(context, {
-      ...(kind === 'animation' ? { kind } : {}),
+      ...(kind !== 'image' ? { kind } : {}),
       files: files.map((image) => image.file),
     });
     if (!Array.isArray(uploads) || uploads.length !== files.length)
@@ -196,13 +187,18 @@ async function uploadFiles(
         upload.method !== 'PUT' ||
         typeof upload.upload_id !== 'string' ||
         !upload.headers ||
-        typeof upload.headers['Content-Type'] !== 'string'
+        typeof upload.headers !== 'object' ||
+        Array.isArray(upload.headers) ||
+        Object.values(upload.headers).some((value) => typeof value !== 'string')
       )
         throw new Error('Server returned an invalid upload');
     }
     validate({
       ...input,
-      [idField]: uploads.map((u) => u.upload_id),
+      [idField]:
+        kind === 'model'
+          ? uploads[0].upload_id
+          : uploads.map((u) => u.upload_id),
     });
     for (const [index, upload] of uploads.entries()) {
       // Presigned URL authentication only; never forward MCP credentials.
@@ -219,7 +215,10 @@ async function uploadFiles(
           `File ${index + 1} upload failed (HTTP ${response.status}); generation was not started`,
         );
     }
-    input[idField] = uploads.map((upload) => upload.upload_id);
+    input[idField] =
+      kind === 'model'
+        ? uploads[0].upload_id
+        : uploads.map((upload) => upload.upload_id);
   }
 }
 
@@ -253,6 +252,8 @@ export async function agentic(options: AgenticOptions, context?: ToolContext) {
 }
 
 export interface RiggingOptions {
+  model?: string;
+  modelUploadId?: string;
   boneTemplate: string;
   skeletonDescription?: string;
   skinningMethod?: string;
@@ -262,11 +263,18 @@ export interface RiggingOptions {
 }
 
 export async function rigging(
-  assetId: string,
+  assetId: string | undefined,
   options: RiggingOptions,
   context?: ToolContext,
 ) {
   return withToolContext(async (context) => {
+    if (
+      [assetId, options.model, options.modelUploadId].filter(Boolean).length !==
+      1
+    )
+      throw new Error(
+        'Provide exactly one generation ID, --model or --model-upload-id',
+      );
     const paths = options.animation ?? [];
     const presets = options.animationPreset ?? [];
     if (paths.length && presets.length)
@@ -285,12 +293,28 @@ export async function rigging(
       );
     const input = omitUndefined({
       asset_id: assetId,
+      model_upload_id: options.modelUploadId,
       bone_template: options.boneTemplate,
       skeleton_description: options.skeletonDescription,
       skinning_method: options.skinningMethod,
       geometry_file_format: options.format,
       animation_preset: presets.length ? presets : undefined,
     });
+    if (options.model) {
+      // Validate model-source parameters before allocating its upload.
+      validateOperation(context, 'rodin_generate_rigging', {
+        ...input,
+        model_upload_id: uploadContract.placeholderId(),
+      });
+      await uploadFiles(
+        [options.model],
+        'model',
+        input,
+        'model_upload_id',
+        (value) => validateOperation(context, 'rodin_generate_rigging', value),
+        context,
+      );
+    }
     await uploadFiles(
       paths,
       'animation',
@@ -312,4 +336,13 @@ export async function animationPresets(
       rodinListAnimationPresets(context, omitUndefined({ category })),
     context,
   );
+}
+
+export async function listUploads(
+  options: { kind?: string; tag?: string; page?: number },
+  context?: ToolContext,
+) {
+  return withToolContext(async (context) => {
+    return rodinListUploads(context, omitUndefined(options));
+  }, context);
 }
