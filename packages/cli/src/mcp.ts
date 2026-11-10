@@ -239,3 +239,10 @@ export async function rodinListAnimationPresets(
 export async function rodinListUploads(context: ToolContext, input: Payload) {
   return call(context, 'rodin_list_uploads', input);
 }
+
+export async function rodinListAnimationCatalog(
+  context: ToolContext,
+  input: { category?: string },
+) {
+  return call(context, 'rodin_list_animation_catalog', input);
+}

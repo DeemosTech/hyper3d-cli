@@ -11,6 +11,16 @@ export const baseSchema: { tools: Tool[] } = JSON.parse(
   await readFile(new URL('./base_schema.json', import.meta.url), 'utf8'),
 );
 
+export const canarySchema: { tools: Tool[] } = JSON.parse(
+  await readFile(new URL('./canary_schema.json', import.meta.url), 'utf8'),
+);
+
+let useCanarySchema = false;
+
+export function configureSchema(canary: boolean) {
+  useCanarySchema = canary;
+}
+
 export function validateInput(schema: Payload, value: unknown) {
   const Constructor = schema.$schema?.includes('2020-12') ? Ajv2020 : Ajv;
   const ajv = new Constructor({
@@ -31,7 +41,10 @@ export function prepareCall(
   warn: (message: string) => void = (message) =>
     process.stderr.write(`warning: ${message}\n`),
 ) {
-  const tool = baseSchema.tools.find((tool) => tool.name === name);
+  const tool =
+    (useCanarySchema &&
+      canarySchema.tools.find((tool) => tool.name === name)) ||
+    baseSchema.tools.find((tool) => tool.name === name);
   if (!tool) throw new Error(`Unsupported tool: ${name}`);
   if (!remote) throw new Error(`Tool unavailable: ${name}`);
   validateInput(remote.inputSchema, input);

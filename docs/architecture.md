@@ -160,10 +160,14 @@ listed. Each file contains `upload_id`, `kind`, nullable `format`, `name`, `tags
 and `created_at`. Rigging accepts exactly one existing generation ID, local
 `--model`, or saved `--model-upload-id`.
 
-The previous canary contract and implementation are now the sole default.
-`--canary-schema` remains recognized and unconditionally prints
-`No canary schema is in progress`, then exits successfully before command parsing,
-endpoint configuration, update checks, or backend connections.
+`--canary-schema` selects overrides and additions from `canary_schema.json`,
+falling back to the base contract for other tools. The default schema is unchanged.
+The canary adds `animation-catalog`, calling `rodin_list_animation_catalog` with
+an optional category and preserving grouped metadata in JSON and human output.
+Legacy `animation-presets` still calls `rodin_list_animation_presets`. Live input
+and output validation remain authoritative; there is no fallback request when a
+server lacks the catalog tool. Selecting canary changes neither authentication
+nor endpoint configuration. Rigging still takes animation ID strings.
 
 The base snapshot does not establish whether a CLI release is outdated; npm
 version checks determine whether an update is available.
