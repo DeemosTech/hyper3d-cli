@@ -17,6 +17,23 @@ const executable = fileURLToPath(
 const exec = promisify(execFile);
 test('CLI against real HTTP MCP: named operations, public commands, error exits and no retry', async () => {
   let calls = 0;
+  let catalogAvailable = true;
+  const animation = {
+    animation_id: 'human_000093',
+    category: 'human',
+    display_name: 'Walking',
+    content_description: 'Walk forward',
+    frames: 31,
+    duration_seconds: 1,
+    loop: {
+      kind: 'travel',
+      alignment: 'next',
+      period_frames: 30,
+      displacement: [0, 0, 1],
+    },
+  };
+  const catalogInputs = [];
+
   const requests = [];
   const { version } = JSON.parse(
     await readFile(
@@ -79,6 +96,49 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
         }),
       );
     }
+    if (catalogAvailable)
+      mcp.registerTool(
+        'rodin_list_animation_catalog',
+        {
+          inputSchema: { category: z.string().optional() },
+          outputSchema: {
+            categories: z.array(
+              z.object({
+                category: z.string(),
+                animations: z.array(
+                  z.object({
+                    animation_id: z.string(),
+                    category: z.string(),
+                    display_name: z.string(),
+                    content_description: z.string(),
+                    frames: z.number().int(),
+                    duration_seconds: z.number(),
+                    loop: z.object({
+                      kind: z.string(),
+                      alignment: z.string(),
+                      period_frames: z.number().nullable(),
+                      displacement: z.array(z.number()),
+                    }),
+                  }),
+                ),
+              }),
+            ),
+          },
+        },
+        async (input) => {
+          catalogInputs.push(input);
+          const data = {
+            categories:
+              !input.category || ['human', 'human_sp'].includes(input.category)
+                ? [{ category: 'human', animations: [animation] }]
+                : [],
+          };
+          return {
+            content: [{ type: 'text', text: JSON.stringify(data) }],
+            structuredContent: data,
+          };
+        },
+      );
     mcp.registerTool(
       'rodin_list_uploads',
       {
@@ -196,6 +256,65 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     ]);
     assert.equal(presets.code, 0, presets.stderr);
     assert.equal(JSON.parse(presets.stdout).category, 'human');
+    for (const category of [undefined, 'human', 'human_sp', 'unknown']) {
+      const args = ['animation-catalog', '--output', 'json'];
+      if (category) args.push('--category', category);
+      const response = await run(args);
+      assert.equal(response.code, 0, response.stderr);
+      assert.equal(response.stderr, '');
+      assert.deepEqual(JSON.parse(response.stdout), {
+        categories:
+          category === 'unknown'
+            ? []
+            : [{ category: 'human', animations: [animation] }],
+      });
+    }
+    assert.deepEqual(catalogInputs, [
+      {},
+      { category: 'human' },
+      { category: 'human_sp' },
+      { category: 'unknown' },
+    ]);
+    const humanCatalog = await run([
+      'animation-catalog',
+
+      '--category',
+      'human',
+    ]);
+    assert.equal(humanCatalog.code, 0, humanCatalog.stderr);
+    assert.match(humanCatalog.stdout, /Walking/);
+    assert.match(humanCatalog.stdout, /human_000093/);
+    const selected = await run([
+      'rigging',
+      'd1bb98f2-48be-4be1-9818-d49de002497a',
+      '--bone-template',
+      'human',
+      '--animation-preset',
+      animation.animation_id,
+      '--output',
+      'json',
+    ]);
+    assert.equal(selected.code, 0, selected.stderr);
+    assert.deepEqual(JSON.parse(selected.stdout).animation_preset, [
+      animation.animation_id,
+    ]);
+    const legacy = await run([
+      'animation-presets',
+      '--category',
+      'human',
+      '--output',
+      'json',
+    ]);
+    assert.equal(legacy.code, 0, legacy.stderr);
+    assert.deepEqual(JSON.parse(legacy.stdout), { category: 'human' });
+    catalogAvailable = false;
+    const unavailable = await run(['animation-catalog']);
+    assert.equal(unavailable.code, 1);
+    assert.match(
+      unavailable.stderr,
+      /Tool unavailable: rodin_list_animation_catalog/,
+    );
+    assert.equal(catalogInputs.length, 5);
     const missingTemplate = await run([
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',

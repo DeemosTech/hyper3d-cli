@@ -9,6 +9,7 @@ import {
   rodinGenerateAgentic,
   rodinGenerateRigging,
   rodinListAnimationPresets,
+  rodinListAnimationCatalog,
   validateOperation,
   rodinGetStatus,
   rodinGetResult,
@@ -345,4 +346,15 @@ export async function listUploads(
   return withToolContext(async (context) => {
     return rodinListUploads(context, omitUndefined(options));
   }, context);
+}
+
+export async function animationCatalog(
+  category?: string,
+  context?: ToolContext,
+) {
+  return withToolContext(
+    async (context) =>
+      rodinListAnimationCatalog(context, omitUndefined({ category })),
+    context,
+  );
 }

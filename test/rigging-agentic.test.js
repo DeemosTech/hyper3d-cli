@@ -172,9 +172,7 @@ test('preset discovery passes category; unknown stops polling even with timed_ou
     },
   };
   await animationPresets(undefined, context);
-  const category = baseSchema.tools.find(
-    (t) => t.name === 'rodin_list_animation_presets',
-  ).inputSchema.properties.category.enum[0];
+  const category = 'human';
   await animationPresets(category, context);
   assert.deepEqual(calls[0].arguments, {});
   assert.deepEqual(calls[1].arguments, { category });
