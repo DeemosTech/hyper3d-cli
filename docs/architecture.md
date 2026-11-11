@@ -144,7 +144,7 @@ the live server schema.
 
 ## Tool schema
 
-`src/base_schema.json` contains the supported MCP reference contract (10 tools).
+`src/base_schema.json` contains the supported MCP reference contract (11 tools).
 Requests must pass the live server schema; differences from the bundled input
 schema warn, retaining forward compatibility for server enum additions. The MCP
 SDK validates live output schemas.
@@ -160,10 +160,14 @@ listed. Each file contains `upload_id`, `kind`, nullable `format`, `name`, `tags
 and `created_at`. Rigging accepts exactly one existing generation ID, local
 `--model`, or saved `--model-upload-id`.
 
-The previous canary contract and implementation are now the sole default.
-`--canary-schema` remains recognized and unconditionally prints
-`No canary schema is in progress`, then exits successfully before command parsing,
-endpoint configuration, update checks, or backend connections.
+`animation-catalog` calls `rodin_list_animation_catalog` with an optional
+category and preserves grouped metadata in JSON and human output. Legacy
+`animation-presets` still calls `rodin_list_animation_presets`. Live input and
+output validation remain authoritative; there is no fallback request when a
+server lacks the catalog tool. Rigging still takes animation ID strings.
+
+There is no active canary contract. `--canary-schema` prints
+`No canary schema is in progress` and exits before command execution.
 
 The base snapshot does not establish whether a CLI release is outdated; npm
 version checks determine whether an update is available.

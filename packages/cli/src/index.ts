@@ -21,6 +21,7 @@ import {
   agentic,
   rigging,
   animationPresets,
+  animationCatalog,
 } from './operations.js';
 import { formatOutput } from './output.js';
 import { checkUpdate, update, startupUpdate, updateChannel } from './update.js';
@@ -72,6 +73,7 @@ cli.hook('preAction', async (_root, command) => {
       'agentic',
       'rigging',
       'animation-presets',
+      'animation-catalog',
     ].includes(command.name())
   )
     return;
@@ -181,6 +183,14 @@ cli
   .description('List animation categories, or exact preset IDs in a category')
   .option('--category <category>', 'Category returned by this command')
   .action(async (options) => print(await animationPresets(options.category)));
+
+cli
+  .command('animation-catalog')
+  .description('List animation metadata grouped by category')
+  .option('--category <category>', 'Filter by catalog category; omit for all')
+  .action(async (options) => {
+    print(await animationCatalog(options.category));
+  });
 
 cli
   .command('rigging [generation-id]')

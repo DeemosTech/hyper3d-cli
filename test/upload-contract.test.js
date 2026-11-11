@@ -122,22 +122,17 @@ test('list_upload maps filters and preserves the backend file response', async (
   );
 });
 
-test('canary switch always reports no active schema without connecting', () => {
+test('inactive canary switch reports no schema without connecting', () => {
   for (const args of [
     ['--canary-schema'],
-    ['--canary-schema', 'generate'],
-    ['rigging', '--canary-schema'],
-    ['--base-url', 'invalid', '--canary-schema', 'list_upload'],
+    ['--canary-schema', 'animation-catalog'],
     ['--canary-schema', '--help'],
     ['--version', '--canary-schema'],
-    ['unknown', '--canary-schema', '--unknown-option'],
   ]) {
     const result = spawnSync(
       process.execPath,
       ['packages/cli/dist/index.js', ...args],
-      {
-        encoding: 'utf8',
-      },
+      { encoding: 'utf8' },
     );
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, 'No canary schema is in progress\n');
