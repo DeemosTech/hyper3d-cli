@@ -122,32 +122,22 @@ test('list_upload maps filters and preserves the backend file response', async (
   );
 });
 
-test('canary help and version remain offline; catalog requires opt-in', () => {
+test('inactive canary switch reports no schema without connecting', () => {
   for (const args of [
+    ['--canary-schema'],
+    ['--canary-schema', 'animation-catalog'],
     ['--canary-schema', '--help'],
     ['--version', '--canary-schema'],
-    ['animation-catalog', '--canary-schema', '--help'],
   ]) {
     const result = spawnSync(
       process.execPath,
       ['packages/cli/dist/index.js', ...args],
-      {
-        encoding: 'utf8',
-      },
+      { encoding: 'utf8' },
     );
     assert.equal(result.status, 0, result.stderr);
-    assert.doesNotMatch(result.stdout, /No canary schema/);
+    assert.equal(result.stdout, 'No canary schema is in progress\n');
+    assert.equal(result.stderr, '');
   }
-  const result = spawnSync(
-    process.execPath,
-    ['packages/cli/dist/index.js', 'animation-catalog'],
-    {
-      encoding: 'utf8',
-      env: { ...process.env, CI: '1' },
-    },
-  );
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /requires --canary-schema/);
 });
 
 test('default accepts images up to 25 MiB and rejects larger files before allocation', async (t) => {

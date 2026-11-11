@@ -268,13 +268,13 @@ hyper3d generate --image ./reference.png
 hyper3d rigging --model ./character.glb --bone-template human
 ```
 
-Use `--canary-schema` to opt into the experimental animation catalog. The server
+`animation-catalog` returns animation metadata grouped by category. The server
 must expose `rodin_list_animation_catalog`; an older server reports an unavailable
-tool. The flag does not change the endpoint or authentication.
+tool.
 
 ```sh
-hyper3d --canary-schema animation-catalog --output json
-hyper3d --canary-schema animation-catalog --category human --output json
+hyper3d animation-catalog --output json
+hyper3d animation-catalog --category human --output json
 ```
 
 The result is `{ categories: [{ category, animations: [...] }] }`. Each animation
@@ -285,5 +285,7 @@ empty `categories` array. Category and animation ordering is preserved.
 
 Choose using the metadata, then pass only the selected `animation_id` to
 `rigging --animation-preset <animation_id>` (rigging consumes credits).
-`animation-presets` keeps its categories/ID-list behavior. The default bundled
-schema remains unchanged; `animation-catalog` requires the canary flag.
+`animation-presets` keeps its categories/ID-list behavior.
+
+There is no active canary schema. `--canary-schema` prints
+`No canary schema is in progress` and exits without running a command.

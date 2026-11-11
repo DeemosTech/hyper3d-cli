@@ -24,11 +24,15 @@ import {
   animationCatalog,
 } from './operations.js';
 import { formatOutput } from './output.js';
-import { configureSchema } from './schema.js';
 import { checkUpdate, update, startupUpdate, updateChannel } from './update.js';
 import { getConfigDir } from './utils.js';
 
 import type { Payload } from './types.js';
+
+if (process.argv.slice(2).includes('--canary-schema')) {
+  process.stdout.write('No canary schema is in progress\n');
+  process.exit(0);
+}
 
 const pkg = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
@@ -41,7 +45,7 @@ const print = (value: Payload, kind?: string) => {
 };
 
 const cli = new Command('hyper3d').version(pkg.version);
-cli.option('--canary-schema', 'Enable experimental animation metadata');
+cli.option('--canary-schema', 'Show whether a canary schema is in progress');
 cli.option(
   '--base-url <url>',
   'Hyper3D API base URL (overrides BASE_URL)',
@@ -55,7 +59,6 @@ cli.addOption(
 
 cli.hook('preAction', () => {
   configureEndpoints(cli.opts().baseUrl);
-  configureSchema(Boolean(cli.opts().canarySchema));
 });
 
 cli.hook('preAction', async (_root, command) => {
@@ -183,13 +186,9 @@ cli
 
 cli
   .command('animation-catalog')
-  .description(
-    'List animation metadata grouped by category (requires --canary-schema)',
-  )
+  .description('List animation metadata grouped by category')
   .option('--category <category>', 'Filter by catalog category; omit for all')
   .action(async (options) => {
-    if (!cli.opts().canarySchema)
-      throw new Error('animation-catalog requires --canary-schema');
     print(await animationCatalog(options.category));
   });
 

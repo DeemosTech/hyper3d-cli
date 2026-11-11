@@ -256,13 +256,8 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     ]);
     assert.equal(presets.code, 0, presets.stderr);
     assert.equal(JSON.parse(presets.stdout).category, 'human');
-    const requestCount = requests.length;
-    const disabledCatalog = await run(['animation-catalog']);
-    assert.equal(disabledCatalog.code, 1);
-    assert.match(disabledCatalog.stderr, /requires --canary-schema/);
-    assert.equal(requests.length, requestCount);
     for (const category of [undefined, 'human', 'human_sp', 'unknown']) {
-      const args = ['--canary-schema', 'animation-catalog', '--output', 'json'];
+      const args = ['animation-catalog', '--output', 'json'];
       if (category) args.push('--category', category);
       const response = await run(args);
       assert.equal(response.code, 0, response.stderr);
@@ -282,7 +277,7 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     ]);
     const humanCatalog = await run([
       'animation-catalog',
-      '--canary-schema',
+
       '--category',
       'human',
     ]);
@@ -290,7 +285,6 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.match(humanCatalog.stdout, /Walking/);
     assert.match(humanCatalog.stdout, /human_000093/);
     const selected = await run([
-      '--canary-schema',
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',
       '--bone-template',
@@ -305,7 +299,6 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
       animation.animation_id,
     ]);
     const legacy = await run([
-      '--canary-schema',
       'animation-presets',
       '--category',
       'human',
@@ -315,7 +308,7 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.equal(legacy.code, 0, legacy.stderr);
     assert.deepEqual(JSON.parse(legacy.stdout), { category: 'human' });
     catalogAvailable = false;
-    const unavailable = await run(['--canary-schema', 'animation-catalog']);
+    const unavailable = await run(['animation-catalog']);
     assert.equal(unavailable.code, 1);
     assert.match(
       unavailable.stderr,

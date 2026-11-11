@@ -2,9 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateInput,
-  canarySchema,
   baseSchema,
-  configureSchema,
   prepareCall,
 } from '../packages/cli/dist/schema.js';
 
@@ -36,21 +34,12 @@ test('validates actual input with remote schema without coercion or defaults', (
   );
 });
 
-test('catalog is canary-only and metadata snapshot rejects legacy string arrays', () => {
-  const catalog = canarySchema.tools.find(
+test('default catalog metadata rejects legacy string arrays and invalid IDs', () => {
+  const catalog = baseSchema.tools.find(
     (tool) => tool.name === 'rodin_list_animation_catalog',
   );
   assert.ok(catalog);
-  assert.equal(
-    baseSchema.tools.some((tool) => tool.name === catalog.name),
-    false,
-  );
-  assert.throws(
-    () => prepareCall(catalog.name, {}, catalog),
-    /Unsupported tool/,
-  );
-  configureSchema(true);
-  try {
+  {
     assert.deepEqual(prepareCall(catalog.name, {}, catalog).arguments, {});
     assert.throws(
       () => prepareCall(catalog.name, { category: 1 }, catalog),
@@ -114,7 +103,5 @@ test('catalog is canary-only and metadata snapshot rejects legacy string arrays'
       () => validateInput(catalog.outputSchema, value),
       /Invalid tool input/,
     );
-  } finally {
-    configureSchema(false);
   }
 });

@@ -3,29 +3,15 @@
     {
       "name": "rodin_list_animation_presets",
       "title": "List Rodin rigging animation presets",
-      "description": "Discover built-in Rodin rigging animations. Without category, returns only categories. With category, returns only animations containing the preset IDs for that category. Use the exact returned IDs when selecting presets. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the preset catalog only and does not generate or modify models or consume credits.",
+      "description": "Legacy preset discovery. Omit category to receive the catalog category names; supply a category to receive its permanent animation_id values. The human_sp category remains accepted as an alias for human. Use rodin_list_animation_catalog for animation metadata. Legacy StandardAnimation aliases remain accepted by rodin_generate_rigging. This reads the preset catalog only and does not generate or modify models or consume credits.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "category": {
-            "type": "string",
-            "enum": [
-              "Bird",
-              "Canine",
-              "Fish",
-              "HeavyHooved",
-              "Human",
-              "LeanHooved",
-              "Lizard",
-              "Rodentia",
-              "human_sp",
-              "seaturtle"
-            ],
-            "description": "Select a category to list its animation IDs. Omit to list categories only."
+            "type": "string"
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "additionalProperties": false
       },
       "outputSchema": {
         "type": "object",
@@ -33,41 +19,23 @@
           "categories": {
             "type": "array",
             "items": {
-              "type": "string",
-              "enum": [
-                "Bird",
-                "Canine",
-                "Fish",
-                "HeavyHooved",
-                "Human",
-                "LeanHooved",
-                "Lizard",
-                "Rodentia",
-                "human_sp",
-                "seaturtle"
-              ]
-            },
-            "description": "Returned only when category is omitted."
+              "type": "string"
+            }
           },
           "animations": {
             "type": "array",
             "items": {
               "type": "string"
-            },
-            "description": "Returned only when category is supplied."
+            }
           }
         },
-        "additionalProperties": false,
-        "$schema": "http://json-schema.org/draft-07/schema#"
+        "additionalProperties": false
       },
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
-      },
-      "execution": {
-        "taskSupport": "forbidden"
       },
       "_meta": {
         "securitySchemes": [
@@ -857,6 +825,148 @@
       },
       "execution": {
         "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:read"]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rodin_list_animation_catalog",
+      "title": "List Rodin rigging animation catalog",
+      "description": "Discover built-in Rodin rigging animations with names, descriptions, frame counts, durations and loop metadata, grouped by category in display order. Omit category to return all animations, or supply a category to filter. Choose animations using their metadata and pass animation_id values to rodin_generate_rigging; legacy StandardAnimation aliases remain accepted for compatibility. Categories group the animation catalog; they do not guarantee compatibility with a skeleton template. This reads the catalog only and does not generate or modify models or consume credits.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Filter animation metadata by catalog category. The legacy human_sp category remains accepted as an alias for human. Omit to return all categories with their animation metadata."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "animations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "animation_id": {
+                        "type": "string",
+                        "pattern": "^[a-z]+_\\d{6}$"
+                      },
+                      "category": {
+                        "type": "string",
+                        "pattern": "^[a-z]+$"
+                      },
+                      "display_name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "content_description": {
+                        "type": "string"
+                      },
+                      "frames": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "duration_seconds": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "loop": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "enum": ["none", "in_place", "travel"],
+                            "type": "string"
+                          },
+                          "alignment": {
+                            "enum": ["none", "duplicate", "next"],
+                            "type": "string"
+                          },
+                          "period_frames": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "displacement": {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ],
+                            "minItems": 3,
+                            "maxItems": 3
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "alignment",
+                          "period_frames",
+                          "displacement"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "animation_id",
+                      "category",
+                      "display_name",
+                      "content_description",
+                      "frames",
+                      "duration_seconds",
+                      "loop"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["category", "animations"],
+              "additionalProperties": false
+            },
+            "description": "Animation metadata grouped by category in display order. Empty when no animations match the category."
+          }
+        },
+        "required": ["categories"],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
       },
       "_meta": {
         "securitySchemes": [
