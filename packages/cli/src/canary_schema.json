@@ -80,11 +80,11 @@
                     "properties": {
                       "animation_id": {
                         "type": "string",
-                        "pattern": "^[A-Za-z]+_\\d{6}$"
+                        "pattern": "^[a-z]+_\\d{6}$"
                       },
                       "category": {
                         "type": "string",
-                        "minLength": 1
+                        "pattern": "^[a-z]+$"
                       },
                       "display_name": {
                         "type": "string",

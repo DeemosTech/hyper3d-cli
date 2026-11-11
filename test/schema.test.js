@@ -86,6 +86,29 @@ test('catalog is canary-only and metadata snapshot rejects legacy string arrays'
       categories: [{ category: 'human', animations: [animation] }],
     };
     validateInput(catalog.outputSchema, value);
+    for (const override of [
+      { animation_id: 'Human_000093' },
+      { category: 'Human' },
+      { category: 'human_sp' },
+      { category: '' },
+    ]) {
+      assert.throws(
+        () =>
+          validateInput(catalog.outputSchema, {
+            categories: [
+              {
+                category: 'human',
+                animations: [{ ...animation, ...override }],
+              },
+            ],
+          }),
+        /Invalid tool input/,
+      );
+    }
+    assert.deepEqual(
+      prepareCall(catalog.name, { category: 'human_sp' }, catalog).arguments,
+      { category: 'human_sp' },
+    );
     animation.loop.displacement = [0, 0];
     assert.throws(
       () => validateInput(catalog.outputSchema, value),
