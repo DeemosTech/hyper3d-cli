@@ -77,6 +77,20 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
         ],
       }),
     );
+    mcp.registerTool(
+      'rodin_generate_polygen',
+      {
+        inputSchema: {
+          asset_id: z.string().uuid(),
+          face_count: z.number().int().min(200).max(20000).optional(),
+          quad_normal: z.boolean().optional(),
+          hd_texture: z.boolean().optional(),
+        },
+      },
+      async (input) => ({
+        content: [{ type: 'text', text: JSON.stringify(input) }],
+      }),
+    );
     for (const name of [
       'rodin_generate_rigging',
       'rodin_list_animation_presets',
@@ -210,7 +224,12 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     assert.doesNotMatch(help.stdout, /^\s+(tools|schema)(?:\s|$)/m);
     assert.match(help.stdout, /--output <format>/);
     assert.doesNotMatch(help.stdout, /--schema-version/);
-    for (const command of ['agentic', 'rigging', 'animation-presets']) {
+    for (const command of [
+      'agentic',
+      'rigging',
+      'animation-presets',
+      'polygen',
+    ]) {
       assert.match(help.stdout, new RegExp(command));
       assert.equal((await run([command, '--help'])).code, 0);
     }
@@ -232,6 +251,31 @@ test('CLI against real HTTP MCP: named operations, public commands, error exits 
     const defaultList = await run(['list_upload', '--output', 'json']);
     assert.equal(defaultList.code, 0, defaultList.stderr);
     assert.deepEqual(JSON.parse(defaultList.stdout).filters, { page: 1 });
+    const assetId = 'd1bb98f2-48be-4be1-9818-d49de002497a';
+    const plainPolygen = await run(['polygen', assetId, '--output', 'json']);
+    assert.equal(plainPolygen.code, 0, plainPolygen.stderr);
+    assert.deepEqual(JSON.parse(plainPolygen.stdout), { asset_id: assetId });
+    const explicitPolygen = await run([
+      'polygen',
+      assetId,
+      '--face-count',
+      '2000',
+      '--no-quad-normal',
+      '--hd-texture',
+      '--output',
+      'json',
+    ]);
+    assert.equal(explicitPolygen.code, 0, explicitPolygen.stderr);
+    assert.deepEqual(JSON.parse(explicitPolygen.stdout), {
+      asset_id: assetId,
+      face_count: 2000,
+      quad_normal: false,
+      hd_texture: true,
+    });
+    assert.equal(
+      (await run(['polygen', assetId, '--face-count', '199'])).code,
+      1,
+    );
     const rigged = await run([
       'rigging',
       'd1bb98f2-48be-4be1-9818-d49de002497a',

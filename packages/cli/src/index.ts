@@ -18,6 +18,7 @@ import {
   result,
   poll,
   bang,
+  polygen,
   agentic,
   rigging,
   animationPresets,
@@ -70,6 +71,7 @@ cli.hook('preAction', async (_root, command) => {
       'poll',
       'result',
       'bang',
+      'polygen',
       'agentic',
       'rigging',
       'animation-presets',
@@ -245,6 +247,51 @@ cli
   .description('Poll until generation finishes or the timeout expires')
   .option('--timeout <seconds>', 'Total polling timeout in seconds', Number, 30)
   .action(async (id, options) => print(await poll(id, options.timeout)));
+
+// polygen
+cli
+  .command('polygen <generation-id>')
+  .description(
+    'Create a low-poly model from a completed Rodin generation (uses credits)',
+  )
+  .option(
+    '--quality <quality>',
+    'auto, low (3000 faces), high (6000 faces); server default: auto',
+  )
+  .option(
+    '--face-count <count>',
+    'Target 200-20000 faces; overrides quality',
+    Number,
+  )
+  .option('--mesh-mode <mode>', 'Quad, Raw or NGon; server default: Quad')
+  .option('--format <format>', 'Geometry format; server default: obj')
+  .option('--quad-normal', 'Bake geometry detail into a normal map')
+  .option('--no-quad-normal', 'Disable normal-map baking')
+  .option(
+    '--material <material>',
+    'None, PBR, Shaded, Hybrid or All; server default: None',
+  )
+  .option(
+    '--resolution <resolution>',
+    'Texture resolution; server default: Basic',
+  )
+  .option(
+    '--texture-mode <mode>',
+    'Texture generation mode; server default: medium',
+  )
+  .option(
+    '--prompt <text>',
+    'Prompt for new textures; defaults to the source prompt',
+  )
+  .option('--escore <value>', 'Texture richness, 0-10', Number)
+  .option('--reference-scale <value>', 'Reference strength, 0-1', Number)
+  .option('--lowres-texture', 'Generate reduced-resolution texture variant')
+  .option('--no-lowres-texture', 'Disable reduced-resolution texture variant')
+  .option('--hd-texture', 'Enable texture super-resolution')
+  .option('--no-hd-texture', 'Disable texture super-resolution')
+  .option('--uhd-texture', 'Enable texture sharpening')
+  .option('--no-uhd-texture', 'Disable texture sharpening')
+  .action(async (id, options) => print(await polygen(id, options)));
 
 // bang
 cli

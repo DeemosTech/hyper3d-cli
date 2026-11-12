@@ -130,7 +130,7 @@ the OAuth `client_id` remains unchanged.
 
 `src/index.ts` binds command-line arguments directly to the exported business
 functions in `src/operations.ts`: `generate`, `status`, `poll`, `result`,
-`bang`, `agentic`, `rigging`, and `animationPresets`. Business functions compose
+`bang`, `polygen`, `agentic`, `rigging`, and `animationPresets`. Business functions compose
 the named MCP tool functions exported by
 `src/mcp.ts`, which handle schema validation and result decoding.
 There is no operations factory or dynamic tool-name dispatch in the CLI.
@@ -144,7 +144,7 @@ the live server schema.
 
 ## Tool schema
 
-`src/base_schema.json` contains the supported MCP reference contract (11 tools).
+`src/base_schema.json` contains the supported MCP reference contract (12 tools).
 Requests must pass the live server schema; differences from the bundled input
 schema warn, retaining forward compatibility for server enum additions. The MCP
 SDK validates live output schemas.
