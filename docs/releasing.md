@@ -1,5 +1,16 @@
 # Release operations
 
+## Planned 0.4.0 update
+
+The source version is 0.4.0. This update adds the `polygen` command and its bundled
+MCP schema. Existing generation, authentication and update commands retain their
+interfaces. PolyGen requires a server exposing `rodin_generate_polygen` and an
+account with PolyGen access; omitted parameters use server defaults.
+
+Follow the development -> prerelease -> main promotion flow below. Preparing
+this version does not publish it; merging into prerelease publishes a beta, and
+promotion to main publishes the stable release.
+
 ## Branch and version policy
 
 Development branches (for example `dev/*`, `feat/*`, or `fix/*`) target

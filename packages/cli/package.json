@@ -1,6 +1,6 @@
 {
   "name": "@hyper3d/cli",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Hyper3D CLI backed by MCP",
   "repository": {
     "type": "git",

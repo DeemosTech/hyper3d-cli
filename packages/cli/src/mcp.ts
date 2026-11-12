@@ -164,6 +164,31 @@ export async function rodinGenerate(
   return call(context, 'rodin_generate', input);
 }
 
+export interface PolygenInput {
+  asset_id: string;
+  quality?: string;
+  face_count?: number;
+  mesh_mode?: string;
+  quad_normal?: boolean;
+  geometry_file_format?: string;
+  material?: string;
+  resolution?: string;
+  texture_mode?: string;
+  prompt?: string;
+  escore?: number;
+  reference_scale?: number;
+  lowres_texture?: boolean;
+  hd_texture?: boolean;
+  uhd_texture?: boolean;
+}
+
+export async function rodinGeneratePolygen(
+  context: ToolContext,
+  input: PolygenInput,
+) {
+  return call(context, 'rodin_generate_polygen', input);
+}
+
 export async function rodinGenerateBang(
   context: ToolContext,
   input: {
