@@ -135,6 +135,28 @@ timeout expires (30 seconds by default). A polling timeout does not cancel the
 generation; run `status` or `poll` again to keep following it. Once generation
 completes, `result` returns download URLs; it does not save files to your machine.
 
+## Create a low-poly model with PolyGen
+
+```sh
+hyper3d polygen <generation-id>
+hyper3d polygen <generation-id> --face-count 3000 --mesh-mode Quad --format obj
+hyper3d polygen <generation-id> --material PBR --texture-mode medium
+```
+
+Use a completed `generate` model as input. PolyGen consumes credits and returns a
+new generation ID for `status`, `poll`, and `result`. It requires PolyGen access.
+The server defaults to automatic face count, Quad topology, OBJ export, and **no
+material**, even when the input model has textures. Select `--material` to generate
+new textures from the source reference images.
+
+`--quality` accepts `auto`, `low` (3000 faces), or `high` (6000 faces).
+`--face-count` accepts integers from 200 to 20000 and overrides quality.
+Topology options are `Quad`, `Raw`, and `NGon`. Run `hyper3d polygen --help` for
+texture controls. Omitted options retain server defaults; `--no-quad-normal`,
+`--no-lowres-texture`, `--no-hd-texture`, and `--no-uhd-texture` explicitly send false.
+This command accepts an existing asset only. A server without the PolyGen tool
+returns an error; billable submissions are never retried automatically.
+
 ## Split a model with BANG
 
 Pass a completed model's generation ID to BANG. Omit `--instruction` for automatic

@@ -976,6 +976,125 @@
           }
         ]
       }
+    },
+    {
+      "name": "rodin_generate_polygen",
+      "title": "Generate PolyGen from a Rodin asset",
+      "description": "Create a low-poly model from a completed rodin_generate asset. Uses the PolyGen API defaults: automatic face count, Quad topology, OBJ export, and no material. Set material to request newly generated textures using the source reference images. This consumes credits and requires PolyGen access. Poll or wait for completion, then get the result with the existing generation tools. Present display_url only after completion. Do not automatically retry a timed-out submission.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "generation_id of a completed rodin_generate task."
+          },
+          "quality": {
+            "type": "string",
+            "enum": ["low", "high", "auto"],
+            "description": "Defaults to auto; low targets 3000 faces and high 6000."
+          },
+          "face_count": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 20000,
+            "description": "Overrides quality, including auto."
+          },
+          "mesh_mode": {
+            "type": "string",
+            "enum": ["Quad", "Raw", "NGon"]
+          },
+          "quad_normal": {
+            "type": "boolean"
+          },
+          "geometry_file_format": {
+            "type": "string",
+            "enum": ["glb", "usdz", "fbx", "obj", "stl"]
+          },
+          "material": {
+            "type": "string",
+            "enum": ["PBR", "Shaded", "All", "Hybrid", "None"]
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["Basic", "High"]
+          },
+          "texture_mode": {
+            "type": "string",
+            "enum": [
+              "legacy",
+              "minimum",
+              "extreme-low",
+              "low",
+              "medium",
+              "high",
+              "extreme-high"
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "escore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "reference_scale": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "lowres_texture": {
+            "type": "boolean"
+          },
+          "hd_texture": {
+            "type": "boolean"
+          },
+          "uhd_texture": {
+            "type": "boolean"
+          }
+        },
+        "required": ["asset_id"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "generation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          },
+          "display_url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": ["generation_id", "status", "display_url"],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:generate"]
+          }
+        ]
+      }
     }
   ]
 }

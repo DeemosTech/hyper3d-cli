@@ -6,6 +6,7 @@ import {
   rodinListUploads,
   rodinGenerate,
   rodinGenerateBang,
+  rodinGeneratePolygen,
   rodinGenerateAgentic,
   rodinGenerateRigging,
   rodinListAnimationPresets,
@@ -96,6 +97,53 @@ export async function status(generationId: string, context?: ToolContext) {
 export async function result(generationId: string, context?: ToolContext) {
   return withToolContext(
     async (context) => rodinGetResult(context, { generation_id: generationId }),
+    context,
+  );
+}
+
+export interface PolygenOptions {
+  quality?: string;
+  faceCount?: number;
+  meshMode?: string;
+  quadNormal?: boolean;
+  format?: string;
+  material?: string;
+  resolution?: string;
+  textureMode?: string;
+  prompt?: string;
+  escore?: number;
+  referenceScale?: number;
+  lowresTexture?: boolean;
+  hdTexture?: boolean;
+  uhdTexture?: boolean;
+}
+
+export async function polygen(
+  generationId: string,
+  options: PolygenOptions = {},
+  context?: ToolContext,
+) {
+  return withToolContext(
+    async (context) =>
+      rodinGeneratePolygen(context, {
+        asset_id: generationId,
+        ...omitUndefined({
+          quality: options.quality,
+          face_count: options.faceCount,
+          mesh_mode: options.meshMode,
+          quad_normal: options.quadNormal,
+          geometry_file_format: options.format,
+          material: options.material,
+          resolution: options.resolution,
+          texture_mode: options.textureMode,
+          prompt: options.prompt,
+          escore: options.escore,
+          reference_scale: options.referenceScale,
+          lowres_texture: options.lowresTexture,
+          hd_texture: options.hdTexture,
+          uhd_texture: options.uhdTexture,
+        }),
+      }),
     context,
   );
 }
