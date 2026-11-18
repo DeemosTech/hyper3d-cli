@@ -122,22 +122,21 @@ test('list_upload maps filters and preserves the backend file response', async (
   );
 });
 
-test('inactive canary switch reports no schema without connecting', () => {
-  for (const args of [
-    ['--canary-schema'],
-    ['--canary-schema', 'animation-catalog'],
-    ['--canary-schema', '--help'],
-    ['--version', '--canary-schema'],
-  ]) {
-    const result = spawnSync(
-      process.execPath,
-      ['packages/cli/dist/index.js', ...args],
-      { encoding: 'utf8' },
-    );
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout, 'No canary schema is in progress\n');
-    assert.equal(result.stderr, '');
-  }
+test('canary deletion is explicitly selected and appears in help', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['packages/cli/dist/index.js', '--canary-schema', '--help'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /delete_upload/);
+  const disabled = spawnSync(
+    process.execPath,
+    ['packages/cli/dist/index.js', 'delete_upload', 'AbCdEfGhIjKlMnOpQrStUA'],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(disabled.status, 0);
+  assert.match(disabled.stderr, /requires --canary-schema/);
 });
 
 test('default accepts images up to 25 MiB and rejects larger files before allocation', async (t) => {

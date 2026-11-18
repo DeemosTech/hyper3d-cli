@@ -271,3 +271,10 @@ export async function rodinListAnimationCatalog(
 ) {
   return call(context, 'rodin_list_animation_catalog', input);
 }
+
+export async function rodinDeleteUploads(
+  context: ToolContext,
+  input: { upload_ids: string[] },
+) {
+  return call(context, 'rodin_delete_uploads', input);
+}

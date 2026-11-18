@@ -309,5 +309,15 @@ Choose using the metadata, then pass only the selected `animation_id` to
 `rigging --animation-preset <animation_id>` (rigging consumes credits).
 `animation-presets` keeps its categories/ID-list behavior.
 
-There is no active canary schema. `--canary-schema` prints
-`No canary schema is in progress` and exits without running a command.
+The canary schema adds upload deletion on servers that support it:
+
+```sh
+hyper3d --canary-schema delete_upload <upload_id> [upload_id...]
+```
+
+Deletes 1–100 distinct saved library or temporary upload IDs owned by your
+account, including unfinished uploads. Files become unavailable for reuse and
+their corresponding quota is released. The response contains
+`deleted_upload_ids`; missing, previously deleted and other users’ IDs are
+ignored. This does not consume credits. Only pass files you want removed.
+The default schema remains unchanged; deletion requires `--canary-schema`.
