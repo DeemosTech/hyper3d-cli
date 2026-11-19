@@ -4,6 +4,7 @@ import { basename, extname } from 'node:path';
 import {
   rodinCreateUploads,
   rodinListUploads,
+  rodinDeleteUploads,
   rodinGenerate,
   rodinGenerateBang,
   rodinGeneratePolygen,
@@ -403,6 +404,16 @@ export async function animationCatalog(
   return withToolContext(
     async (context) =>
       rodinListAnimationCatalog(context, omitUndefined({ category })),
+    context,
+  );
+}
+
+export async function deleteUploads(
+  upload_ids: string[],
+  context?: ToolContext,
+) {
+  return withToolContext(
+    async (context) => rodinDeleteUploads(context, { upload_ids }),
     context,
   );
 }

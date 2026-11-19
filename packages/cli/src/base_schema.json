@@ -1095,6 +1095,59 @@
           }
         ]
       }
+    },
+    {
+      "name": "rodin_delete_uploads",
+      "title": "Delete Rodin uploaded files",
+      "description": "Delete the user’s saved library files or transient uploads, including unfinished uploads, by upload ID. This makes the files unavailable for future use and releases their corresponding upload quota; stored objects are removed asynchronously. Use IDs from rodin_list_uploads or rodin_create_uploads. Only delete files the user wants removed. Missing, already deleted and other users’ IDs are ignored. Returns only IDs deleted by this call. Does not consume credits.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "upload_ids": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{21}[AEIMQUYcgkosw048]$"
+            }
+          }
+        },
+        "required": ["upload_ids"],
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "deleted_upload_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{21}[AEIMQUYcgkosw048]$"
+            }
+          }
+        },
+        "required": ["deleted_upload_ids"],
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      },
+      "_meta": {
+        "securitySchemes": [
+          {
+            "type": "oauth2",
+            "scopes": ["rodin:generate"]
+          }
+        ]
+      }
     }
   ]
 }

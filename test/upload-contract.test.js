@@ -125,7 +125,7 @@ test('list_upload maps filters and preserves the backend file response', async (
 test('inactive canary switch reports no schema without connecting', () => {
   for (const args of [
     ['--canary-schema'],
-    ['--canary-schema', 'animation-catalog'],
+    ['--canary-schema', 'delete_upload', 'AbCdEfGhIjKlMnOpQrStUA'],
     ['--canary-schema', '--help'],
     ['--version', '--canary-schema'],
   ]) {
