@@ -26,11 +26,15 @@ import {
   animationCatalog,
 } from './operations.js';
 import { formatOutput } from './output.js';
-import { useCanarySchema } from './schema.js';
 import { checkUpdate, update, startupUpdate, updateChannel } from './update.js';
 import { getConfigDir } from './utils.js';
 
 import type { Payload } from './types.js';
+
+if (process.argv.slice(2).includes('--canary-schema')) {
+  process.stdout.write('No canary schema is in progress\n');
+  process.exit(0);
+}
 
 const pkg = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
@@ -43,7 +47,7 @@ const print = (value: Payload, kind?: string) => {
 };
 
 const cli = new Command('hyper3d').version(pkg.version);
-cli.option('--canary-schema', 'Use the experimental upload deletion schema');
+cli.option('--canary-schema', 'Show whether a canary schema is in progress');
 cli.option(
   '--base-url <url>',
   'Hyper3D API base URL (overrides BASE_URL)',
@@ -57,7 +61,6 @@ cli.addOption(
 
 cli.hook('preAction', () => {
   configureEndpoints(cli.opts().baseUrl);
-  useCanarySchema(Boolean(cli.opts().canarySchema));
 });
 
 cli.hook('preAction', async (_root, command) => {
@@ -232,12 +235,8 @@ cli
 
 cli
   .command('delete_upload <upload_ids...>')
-  .description(
-    'Delete saved library or temporary uploads (requires --canary-schema)',
-  )
+  .description('Delete saved library or temporary uploads')
   .action(async (upload_ids: string[]) => {
-    if (!cli.opts().canarySchema)
-      throw new Error('delete_upload requires --canary-schema');
     print(await deleteUploads(upload_ids));
   });
 
