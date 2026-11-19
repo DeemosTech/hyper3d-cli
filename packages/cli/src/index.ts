@@ -14,6 +14,7 @@ import {
 import {
   generate,
   listUploads,
+  deleteUploads,
   status,
   result,
   poll,
@@ -230,6 +231,13 @@ cli
   .option('--page <number>', 'Page number, 50 files per page', Number, 1)
   .action(async (options) => {
     print(await listUploads(options));
+  });
+
+cli
+  .command('delete_upload <upload_ids...>')
+  .description('Delete saved library or temporary uploads')
+  .action(async (upload_ids: string[]) => {
+    print(await deleteUploads(upload_ids));
   });
 
 // poll
