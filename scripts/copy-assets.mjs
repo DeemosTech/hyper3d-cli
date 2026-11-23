@@ -1,5 +1,9 @@
 import { copyFile, chmod } from 'node:fs/promises';
 await copyFile(
+  new URL('../README.md', import.meta.url),
+  new URL('../packages/cli/README.md', import.meta.url),
+);
+await copyFile(
   new URL('../packages/cli/src/base_schema.json', import.meta.url),
   new URL('../packages/cli/dist/base_schema.json', import.meta.url),
 );
