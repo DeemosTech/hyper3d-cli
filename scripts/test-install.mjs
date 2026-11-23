@@ -25,6 +25,7 @@ try {
     ]),
   );
   const files = packed[0].files.map((file) => file.path);
+  assert.ok(files.includes('README.md'));
   assert.ok(files.includes('dist/index.js'));
   assert.ok(files.includes('dist/base_schema.json'));
   assert.ok(!files.includes('dist/canary_schema.json'));
